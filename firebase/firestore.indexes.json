@@ -1,0 +1,20 @@
+{
+    "indexes": [
+    {
+    "collectionGroup": "collection-items",
+    "queryScope": "COLLECTION",
+    "fields": [
+    { "fieldPath": "ownerId", "order": "ASCENDING" },
+    { "fieldPath": "tradable", "order": "ASCENDING" }
+    ]
+    },
+    {
+    "collectionGroup": "wishlists",
+    "queryScope": "COLLECTION",
+    "fields": [
+    { "fieldPath": "targetOwnerId", "order": "ASCENDING" }
+    ]
+    }
+    ],
+    "fieldOverrides": []
+}

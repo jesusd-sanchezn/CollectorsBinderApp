@@ -1,0 +1,26 @@
+{
+    "expo": {
+    "name": "MTG Binder",
+    "slug": "mtg-binder",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+    },
+    "updates": {
+        "fallbackToCacheTimeout": 0
+    },
+    "ios": {
+        "supportsTablet": true,
+        "bundleIdentifier": "com.yourco.mtgbinder"
+    },
+    "android": {
+        "package": "com.yourco.mtgbinder"
+    },
+    "web": {
+        "favicon": "./assets/favicon.png"
+    }
+    }
+}

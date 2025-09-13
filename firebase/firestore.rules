@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+match /databases/{database}/documents {
+
+
+function isSignedIn() { return request.auth != null; }
+function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+
+
+match /users/{userId} {
+allow read: if isSignedIn();
+allow write: if isOwner(userId);
+}
+
+
+match /binders/{binderId} {
+allow read: if isSignedIn();
+allow create: if isSignedIn();
+allow update, delete: if resource.data.ownerId == request.auth.uid;
+}
+
+
+match /collection-items/{itemId} {
+allow read: if isSignedIn();
+allow create, update, delete: if request.resource.data.ownerId == request.auth.uid;
+}
+
+
+match /wishlists/{docId} {
+allow read, write: if isSignedIn();
+}
+
+
+match /trade-sessions/{sessionId} {
+allow read, write: if isSignedIn();
+}
+
+
+match /prices/{productId} {
+allow read: if true; // prices are public
+allow write: if false; // only via functions with admin SDK
+}
+}
+}

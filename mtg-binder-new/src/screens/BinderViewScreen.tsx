@@ -1,0 +1,1131 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  TouchableOpacity, 
+  Alert, 
+  Modal,
+  TextInput,
+  ActivityIndicator,
+  Dimensions,
+  Image 
+} from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList, Binder, BinderPage, BinderSlot, Card } from '../types';
+import { BinderService } from '../lib/binderService';
+import { CSVParser } from '../lib/csvParser';
+import { useAuthStore } from '../state/useAuthStore';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'BinderView'>;
+
+const { width } = Dimensions.get('window');
+const CARD_SIZE = (width - 60) / 3; // 3 cards per row with margins
+
+export default function BinderViewScreen({ route }: Props) {
+  const { binderId, ownerId, ownerName } = route.params;
+  const { user } = useAuthStore();
+  const [binder, setBinder] = useState<Binder | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [csvData, setCsvData] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [selectedCardSlot, setSelectedCardSlot] = useState<{pageNumber: number, slotPosition: number} | null>(null);
+  
+  // Determine if current user is the owner
+  const isOwner = user?.uid === ownerId;
+
+  useEffect(() => {
+    loadBinder();
+  }, [binderId]);
+
+  const loadBinder = async () => {
+    try {
+      setLoading(true);
+      // Load binder from Firebase or create empty binder
+      const binder = await BinderService.getBinder(binderId);
+      if (binder) {
+        setBinder(binder);
+      } else {
+        // Create empty binder if not found
+        const emptyBinder: Binder = {
+          id: binderId,
+          ownerId,
+          name: `${ownerName}'s Binder`,
+          description: 'A digital MTG collection',
+          isPublic: true,
+          pages: [
+            {
+              id: 'page-1',
+              pageNumber: 1,
+              slots: Array.from({ length: 9 }, (_, i) => ({
+                id: `slot-1-${i}`,
+                position: i,
+                isEmpty: true
+              }))
+            }
+          ],
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        setBinder(emptyBinder);
+        // Note: We're not saving this to Firebase yet - it will be saved when user adds content
+      }
+    } catch (error) {
+      console.error('Error loading binder:', error);
+      Alert.alert('Error', 'Failed to load binder');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const importCSV = async () => {
+    if (!csvData.trim()) {
+      Alert.alert('Error', 'Please paste your CSV data');
+      return;
+    }
+
+    try {
+      setImporting(true);
+      
+      // Parse CSV locally first
+      const parseResult = CSVParser.parseDelverLensCSV(csvData);
+      
+      if (!parseResult.success) {
+        Alert.alert('CSV Parse Error', parseResult.errors.join('\n'));
+        return;
+      }
+
+      // Convert to app format with real card images
+      Alert.alert('Loading Images', `Fetching card images from Scryfall for ${parseResult.cards.length} cards... This may take a few minutes.`);
+      const appCards = await CSVParser.convertToAppCards(parseResult.cards);
+      
+              // Add cards to the binder using BinderService
+              if (binder) {
+                let importedCount = 0;
+                let currentBinder = { ...binder }; // Work with a local copy
+
+                for (const card of appCards) {
+                  let slotFound = false;
+                  
+                  // Try to find an empty slot in existing pages
+                  for (let pageIndex = 0; pageIndex < currentBinder.pages.length && !slotFound; pageIndex++) {
+                    const page = currentBinder.pages[pageIndex];
+                    for (let slotIndex = 0; slotIndex < page.slots.length && !slotFound; slotIndex++) {
+                      if (page.slots[slotIndex].isEmpty) {
+                        // Add card to this slot
+                        await BinderService.addCardToSlot(
+                          binderId,
+                          pageIndex + 1,
+                          slotIndex,
+                          card
+                        );
+                        slotFound = true;
+                        importedCount++;
+                        
+                        // Update local binder state
+                        currentBinder.pages[pageIndex].slots[slotIndex] = {
+                          id: `${binderId}-${pageIndex + 1}-${slotIndex}`,
+                          position: slotIndex,
+                          card,
+                          isEmpty: false
+                        };
+                      }
+                    }
+                  }
+
+                  // If no empty slots found, add a new page
+                  if (!slotFound) {
+                    await BinderService.addPageToBinder(binderId);
+                    // Add card to first slot of the new page
+                    await BinderService.addCardToSlot(
+                      binderId,
+                      currentBinder.pages.length + 1,
+                      0,
+                      card
+                    );
+                    importedCount++;
+                    
+                    // Update local binder state
+                    const newPageNumber = currentBinder.pages.length + 1;
+                    const newPage: BinderPage = {
+                      id: `page-${newPageNumber}`,
+                      pageNumber: newPageNumber,
+                      slots: Array.from({ length: 9 }, (_, i): BinderSlot => ({
+                        id: `slot-${newPageNumber}-${i}`,
+                        position: i,
+                        isEmpty: i !== 0
+                      }))
+                    };
+                    newPage.slots[0] = {
+                      id: `${binderId}-${newPageNumber}-0`,
+                      position: 0,
+                      card: card as Card,
+                      isEmpty: false
+                    };
+                    currentBinder.pages.push(newPage);
+                  }
+                }
+
+                // Update the local binder state immediately
+                setBinder(currentBinder);
+                
+                // Also reload from Firebase to ensure consistency
+                await loadBinder();
+                Alert.alert('Success', `Imported ${importedCount} cards successfully!`);
+                setCsvData('');
+                setShowImportModal(false);
+              }
+    } catch (error) {
+      console.error('Error importing CSV:', error);
+      Alert.alert('Error', 'Failed to import CSV. Please check the format.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const addPage = async () => {
+    try {
+      await BinderService.addPageToBinder(binderId);
+      await loadBinder(); // Reload to get updated data
+    } catch (error) {
+      console.error('Error adding page:', error);
+      Alert.alert('Error', 'Failed to add page');
+    }
+  };
+
+  const handleCardPress = (card: Card, pageNumber: number, slotPosition: number) => {
+    setSelectedCard(card);
+    setSelectedCardSlot({ pageNumber, slotPosition });
+    setShowCardModal(true);
+  };
+
+  const handleRearrangeCards = async () => {
+    if (!binder) return;
+
+    try {
+      Alert.alert(
+        'Rearrange Cards',
+        'This will reorganize all cards to fill empty slots and remove empty pages. Continue?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Rearrange',
+            onPress: async () => {
+              try {
+                await BinderService.rearrangeCards(binderId);
+                await loadBinder();
+                Alert.alert('Success', 'Cards rearranged successfully!');
+              } catch (error) {
+                console.error('Error rearranging cards:', error);
+                Alert.alert('Error', 'Failed to rearrange cards');
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error in rearrange confirmation:', error);
+    }
+  };
+
+  const handleMarkForTrade = async () => {
+    if (!selectedCard || !user) return;
+
+    try {
+      Alert.alert(
+        'Mark for Trade',
+        `Mark "${selectedCard.name}" for trading with ${ownerName}?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Mark for Trade',
+            onPress: async () => {
+              try {
+                // TODO: Implement trade request creation
+                // For now, just show a success message
+                Alert.alert(
+                  'Trade Request', 
+                  `You've marked "${selectedCard.name}" for trading with ${ownerName}. Trade requests feature coming soon!`
+                );
+                setShowCardModal(false);
+                setSelectedCard(null);
+                setSelectedCardSlot(null);
+              } catch (error) {
+                console.error('Error marking card for trade:', error);
+                Alert.alert('Error', 'Failed to mark card for trade');
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error in mark for trade confirmation:', error);
+    }
+  };
+
+  const handleDeleteCard = async () => {
+    if (!selectedCardSlot || !binder) {
+      return;
+    }
+
+    try {
+      // Show confirmation dialog
+      Alert.alert(
+        'Delete Card',
+        `Are you sure you want to delete "${selectedCard?.name}"?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Remove card from Firebase
+                await BinderService.removeCardFromSlot(
+                  binderId,
+                  selectedCardSlot.pageNumber,
+                  selectedCardSlot.slotPosition
+                );
+
+                // Rearrange cards to fill empty slots and remove empty pages
+                await BinderService.rearrangeCards(binderId);
+
+                // Reload binder to get the rearranged data
+                await loadBinder();
+                
+                setShowCardModal(false);
+                setSelectedCard(null);
+                setSelectedCardSlot(null);
+
+                Alert.alert('Success', 'Card deleted and binder rearranged!');
+              } catch (error) {
+                console.error('Error deleting card:', error);
+                Alert.alert('Error', 'Failed to delete card');
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error in delete confirmation:', error);
+    }
+  };
+
+  const renderCardSlot = (slot: BinderSlot, pageNumber: number) => {
+    if (slot.isEmpty) {
+      return (
+        <TouchableOpacity style={styles.emptySlot}>
+          <Text style={styles.emptySlotText}>+</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <TouchableOpacity 
+        style={styles.cardSlot}
+        onPress={() => handleCardPress(slot.card!, pageNumber, slot.position)}
+      >
+        {/* Card Name at Top */}
+        <View style={styles.cardNameContainer}>
+          <Text style={styles.cardNameText} numberOfLines={2}>
+            {slot.card?.name}
+          </Text>
+        </View>
+
+        <View style={styles.cardImageContainer}>
+          {slot.card?.imageUrl ? (
+            <Image 
+              source={{ uri: slot.card.imageUrl }} 
+              style={styles.cardImage}
+              resizeMode="none"
+              onError={() => {
+                // Image failed to load, will show placeholder
+                console.log('Image failed to load:', slot.card?.imageUrl);
+              }}
+            />
+          ) : (
+            <View style={styles.cardImagePlaceholder}>
+              <Text style={styles.cardSet}>{slot.card?.setCode}</Text>
+            </View>
+          )}
+
+          {/* Card Info Labels */}
+          <View style={styles.cardInfoContainer}>
+            <View style={styles.cardInfoRow}>
+              <Text style={styles.cardInfoLabel}>Condition:</Text>
+              <Text style={styles.cardInfoValue}>{slot.card?.condition}</Text>
+            </View>
+            <View style={styles.cardInfoRow}>
+              <Text style={styles.cardInfoLabel}>Finish:</Text>
+              <Text style={styles.cardInfoValue}>{slot.card?.finish}</Text>
+            </View>
+            {slot.card?.price && (
+              <View style={styles.cardInfoRow}>
+                <Text style={styles.cardInfoLabel}>Price:</Text>
+                <Text style={styles.cardPrice}>${slot.card.price}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderPage = (page: BinderPage) => {
+    // Ensure we have exactly 9 slots for 3x3 grid
+    const slots = page.slots.slice(0, 9);
+    while (slots.length < 9) {
+      slots.push({
+        id: `empty-${slots.length}`,
+        position: slots.length,
+        isEmpty: true
+      });
+    }
+
+    return (
+      <View style={styles.pageGrid}>
+        {slots.map((slot) => (
+          <View key={slot.id} style={styles.slotContainer}>
+            {renderCardSlot(slot, page.pageNumber)}
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4CAF50" />
+        <Text style={styles.loadingText}>Loading binder...</Text>
+      </View>
+    );
+  }
+
+  if (!binder) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Binder not found</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>{binder.name}</Text>
+        {isOwner && (
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => setShowImportModal(true)}
+            >
+              <Text style={styles.actionButtonText}>📥 Import</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={addPage}
+            >
+              <Text style={styles.actionButtonText}>📄 Add Page</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={handleRearrangeCards}
+            >
+              <Text style={styles.actionButtonText}>🔄 Rearrange</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.binderContent}>
+        {/* Page Navigation */}
+        <View style={styles.pageNavigation}>
+          <TouchableOpacity 
+            style={[styles.navButton, currentPage === 0 && styles.navButtonDisabled]}
+            onPress={() => setCurrentPage(Math.max(0, currentPage - 1))}
+            disabled={currentPage === 0}
+          >
+            <Text style={[styles.navButtonText, currentPage === 0 && styles.navButtonTextDisabled]}>
+              ← Previous
+            </Text>
+          </TouchableOpacity>
+          
+          <Text style={styles.pageIndicator}>
+            Page {currentPage + 1} of {binder.pages.length}
+          </Text>
+          
+          <TouchableOpacity 
+            style={[styles.navButton, currentPage >= binder.pages.length - 1 && styles.navButtonDisabled]}
+            onPress={() => setCurrentPage(Math.min(binder.pages.length - 1, currentPage + 1))}
+            disabled={currentPage >= binder.pages.length - 1}
+          >
+            <Text style={[styles.navButtonText, currentPage >= binder.pages.length - 1 && styles.navButtonTextDisabled]}>
+              Next →
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Current Page Display */}
+        <View style={styles.currentPageContainer}>
+          {renderPage(binder.pages[currentPage])}
+        </View>
+
+        {/* Page Thumbnails */}
+        <View style={styles.pageThumbnails}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {binder.pages.map((page, index) => (
+              <TouchableOpacity
+                key={page.id}
+                style={[
+                  styles.thumbnail,
+                  index === currentPage && styles.thumbnailActive
+                ]}
+                onPress={() => setCurrentPage(index)}
+              >
+                <Text style={[
+                  styles.thumbnailText,
+                  index === currentPage && styles.thumbnailTextActive
+                ]}>
+                  {index + 1}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+
+      {/* CSV Import Modal */}
+      <Modal
+        visible={showImportModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowImportModal(false)}>
+              <Text style={styles.cancelButton}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Import Cards from CSV</Text>
+            <TouchableOpacity onPress={importCSV} disabled={importing}>
+              <Text style={[styles.importButton, importing && styles.disabledButton]}>
+                {importing ? 'Importing...' : 'Import'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Loading Overlay */}
+          {importing && (
+            <View style={styles.loadingOverlay}>
+              <View style={styles.loadingContent}>
+                <ActivityIndicator size="large" color="#4CAF50" />
+                <Text style={styles.loadingText}>Fetching card images from Scryfall...</Text>
+                <Text style={styles.loadingSubtext}>This may take a few minutes</Text>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.modalContent}>
+            <Text style={styles.instructionsTitle}>📋 CSV Import Instructions</Text>
+            <Text style={styles.instructionsText}>
+              Paste your DelverLens CSV export here. The format should include:
+            </Text>
+            <Text style={styles.instructionsList}>
+              • Card Name (required){'\n'}
+              • Set Name (required){'\n'}
+              • Quantity (required){'\n'}
+              • Condition (optional, defaults to NM){'\n'}
+              • Finish (optional, defaults to nonfoil)
+            </Text>
+            
+            <View style={styles.sampleBox}>
+              <Text style={styles.sampleTitle}>📝 Sample CSV Format:</Text>
+              <Text style={styles.sampleText}>
+                Card Name,Set Name,Quantity,Condition,Finish{'\n'}
+                Lightning Bolt,Magic 2010,4,NM,nonfoil{'\n'}
+                Counterspell,Magic 2010,2,LP,foil
+              </Text>
+            </View>
+
+            <TextInput
+              style={styles.csvInput}
+              value={csvData}
+              onChangeText={setCsvData}
+              placeholder="Paste your CSV data here..."
+              placeholderTextColor="#666"
+              multiline
+              numberOfLines={10}
+            />
+
+            <View style={styles.infoBox}>
+              <Text style={styles.infoTitle}>💡 Tips</Text>
+              <Text style={styles.infoText}>
+                • Use DelverLens app to scan your cards{'\n'}
+                • Export as CSV from DelverLens{'\n'}
+                • Cards will be automatically priced{'\n'}
+                • Empty slots will be filled automatically
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Card Detail Modal */}
+      <Modal
+        visible={showCardModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowCardModal(false)}
+      >
+        <View style={styles.cardModalOverlay}>
+          <TouchableOpacity 
+            style={styles.cardModalBackground}
+            onPress={() => setShowCardModal(false)}
+            activeOpacity={1}
+          >
+            <View style={styles.cardModalContent}>
+              <TouchableOpacity 
+                style={styles.cardModalCloseButton}
+                onPress={() => setShowCardModal(false)}
+              >
+                <Text style={styles.cardModalCloseText}>✕</Text>
+              </TouchableOpacity>
+              
+              {selectedCard && (
+                <View style={styles.cardDetailContainer}>
+                  <Image 
+                    source={{ uri: selectedCard.imageUrl }} 
+                    style={styles.cardDetailImage}
+                    resizeMode="contain"
+                  />
+                  
+                  <View style={styles.cardDetailInfo}>
+                    <Text style={styles.cardDetailName}>{selectedCard.name}</Text>
+                    <Text style={styles.cardDetailSet}>{selectedCard.set} ({selectedCard.setCode})</Text>
+                    
+                    <View style={styles.cardDetailStats}>
+                      <View style={styles.cardDetailStat}>
+                        <Text style={styles.cardDetailStatLabel}>Condition:</Text>
+                        <Text style={styles.cardDetailStatValue}>{selectedCard.condition}</Text>
+                      </View>
+                      <View style={styles.cardDetailStat}>
+                        <Text style={styles.cardDetailStatLabel}>Finish:</Text>
+                        <Text style={styles.cardDetailStatValue}>{selectedCard.finish}</Text>
+                      </View>
+                      <View style={styles.cardDetailStat}>
+                        <Text style={styles.cardDetailStatLabel}>Quantity:</Text>
+                        <Text style={styles.cardDetailStatValue}>{selectedCard.quantity}</Text>
+                      </View>
+                      {selectedCard.price && (
+                        <View style={styles.cardDetailStat}>
+                          <Text style={styles.cardDetailStatLabel}>Price:</Text>
+                          <Text style={styles.cardDetailPrice}>${selectedCard.price}</Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    {/* Action Button - Delete for owner, Mark for Trade for friends */}
+                    {isOwner ? (
+                      <TouchableOpacity 
+                        style={styles.deleteButton}
+                        onPress={handleDeleteCard}
+                      >
+                        <Text style={styles.deleteButtonText}>🗑️ Delete Card</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity 
+                        style={styles.tradeButton}
+                        onPress={handleMarkForTrade}
+                      >
+                        <Text style={styles.tradeButtonText}>🔄 Mark for Trade</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+  },
+  loadingText: {
+    color: '#ccc',
+    marginTop: 10,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+  },
+  errorText: {
+    color: '#ff6b6b',
+    fontSize: 18,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  binderContent: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 20,
+  },
+  pageNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 8, // Reduced from 15 to 8
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8, // Reduced from 12 to 8
+    marginBottom: 10, // Reduced from 20 to 10
+  },
+  navButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12, // Reduced from 16 to 12
+    paddingVertical: 6, // Reduced from 8 to 6
+    borderRadius: 4, // Reduced from 6 to 4
+  },
+  navButtonDisabled: {
+    backgroundColor: '#333',
+  },
+  navButtonText: {
+    color: '#fff',
+    fontSize: 12, // Reduced from 14 to 12
+    fontWeight: '600',
+  },
+  navButtonTextDisabled: {
+    color: '#666',
+  },
+  pageIndicator: {
+    color: '#fff',
+    fontSize: 14, // Reduced from 16 to 14
+    fontWeight: 'bold',
+  },
+  currentPageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pageThumbnails: {
+    paddingVertical: 8, // Reduced from 15 to 8
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+  },
+  thumbnail: {
+    width: 32, // Reduced from 40 to 32
+    height: 32, // Reduced from 40 to 32
+    borderRadius: 16, // Reduced from 20 to 16
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 3, // Reduced from 5 to 3
+  },
+  thumbnailActive: {
+    backgroundColor: '#4CAF50',
+  },
+  thumbnailText: {
+    color: '#ccc',
+    fontSize: 12, // Reduced from 14 to 12
+    fontWeight: 'bold',
+  },
+  thumbnailTextActive: {
+    color: '#fff',
+  },
+  pageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
+    minHeight: 680, // Increased height to accommodate taller cards (3 rows × 240px + gaps)
+  },
+  slotContainer: {
+    width: '30%', // 3 columns with proper spacing
+    height: 220, // Much more height to show full card image
+    marginBottom: 10, // Gap between rows
+  },
+  cardSlot: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+    padding: 2, // Slightly more padding for bigger pockets
+    overflow: 'hidden',
+  },
+  emptySlot: {
+    flex: 1,
+    backgroundColor: '#333',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#555',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptySlotText: {
+    color: '#888',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  cardNameContainer: {
+    height: 10, // Smaller height for card name to give more space to image
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 1,
+  },
+  cardNameText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 12,
+  },
+  cardImageContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%', // Take full height of container
+    borderRadius: 8,
+  },
+  cardImagePlaceholder: {
+    width: '100%',
+    height: '100%', // Take full height of container
+    backgroundColor: '#333',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardName: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  cardSet: {
+    color: '#ccc',
+    fontSize: 8,
+  },
+  cardInfoContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 45, // Even more height to ensure price is clearly visible
+    paddingTop: 2,
+    backgroundColor: 'rgba(26, 26, 26, 0.95)', // More opaque background for better readability
+  },
+  cardInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 1, // Increased spacing for better readability
+  },
+  cardInfoLabel: {
+    color: '#888',
+    fontSize: 8, // Larger for better readability
+    fontWeight: '600',
+  },
+  cardInfoValue: {
+    color: '#ccc',
+    fontSize: 8, // Larger for better readability
+    fontWeight: '500',
+  },
+  cardPrice: {
+    color: '#4CAF50',
+    fontSize: 11, // Larger for better readability
+    fontWeight: 'bold',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  cancelButton: {
+    color: '#4CAF50',
+    fontSize: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  importButton: {
+    color: '#4CAF50',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  instructionsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  instructionsText: {
+    fontSize: 14,
+    color: '#ccc',
+    marginBottom: 8,
+  },
+  instructionsList: {
+    fontSize: 14,
+    color: '#ccc',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  csvInput: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#fff',
+    borderWidth: 1,
+    borderColor: '#333',
+    textAlignVertical: 'top',
+    height: 200,
+    marginBottom: 20,
+  },
+  infoBox: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    padding: 16,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#ccc',
+    lineHeight: 20,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  sampleBox: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+  },
+  sampleTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  sampleText: {
+    fontSize: 12,
+    color: '#ccc',
+    fontFamily: 'monospace',
+    lineHeight: 16,
+  },
+  // Card Detail Modal Styles
+  cardModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardModalBackground: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardModalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: '#2a2a2a',
+    borderRadius: 12,
+    padding: 20,
+    position: 'relative',
+  },
+  cardModalCloseButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  cardModalCloseText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  cardDetailContainer: {
+    alignItems: 'center',
+  },
+  cardDetailImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  cardDetailInfo: {
+    width: '100%',
+  },
+  cardDetailName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  cardDetailSet: {
+    fontSize: 14,
+    color: '#ccc',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  cardDetailStats: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 15,
+  },
+  cardDetailStat: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cardDetailStatLabel: {
+    fontSize: 14,
+    color: '#888',
+    fontWeight: '600',
+  },
+  cardDetailStatValue: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  cardDetailPrice: {
+    fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingContent: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 12,
+    padding: 30,
+    alignItems: 'center',
+    minWidth: 250,
+  },
+  loadingSubtext: {
+    color: '#ccc',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  deleteButton: {
+    backgroundColor: '#ff4444',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  tradeButton: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  tradeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
