@@ -32,6 +32,15 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Firebase config files with sensitive data
+firebase-config.js
+firebase-config.json
 
 # typescript
 *.tsbuildinfo

@@ -5,8 +5,9 @@ import { getMessaging, isSupported } from 'firebase/messaging';
 
 
 // TODO: replace with your config (Firebase Console → Project Settings)
+// SECURITY WARNING: API keys should be stored in environment variables
 const firebaseConfig = {
-apiKey: 'AIzaSyDNJBZHRLJuUU-LNpW4XPtcTGn4FZTZEm4',
+apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'your_api_key_here',
 authDomain: 'collectorsbinderapp.firebaseapp.com',
 projectId: 'collectorsbinderapp',
 storageBucket: 'collectorsbinderapp.firebasestorage.app',
