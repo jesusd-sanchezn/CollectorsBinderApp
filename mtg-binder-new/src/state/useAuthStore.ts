@@ -22,6 +22,8 @@ interface AuthState {
   signInWithFacebook: () => Promise<void>;
   signOut: () => Promise<void>;
   initializeAuth: () => void;
+  getUserProfile: () => Promise<any>;
+  updateProfile: (data: { displayName?: string; country?: string }) => Promise<void>;
 }
 
 // Helper function to create or update user document in Firestore
@@ -140,5 +142,54 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Return unsubscribe function for cleanup
     return unsubscribe;
+  },
+
+  getUserProfile: async () => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('User must be authenticated to get profile');
+      }
+      
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        throw new Error('User profile not found');
+      }
+      
+      return userDoc.data();
+    } catch (error) {
+      console.error('Error getting user profile:', error);
+      throw error;
+    }
+  },
+
+  updateProfile: async (data: { displayName?: string; country?: string }) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('User must be authenticated to update profile');
+      }
+      
+      const userRef = doc(db, 'users', currentUser.uid);
+      const updateData: any = {
+        updatedAt: serverTimestamp()
+      };
+      
+      if (data.displayName !== undefined) {
+        updateData.displayName = data.displayName;
+      }
+      
+      if (data.country !== undefined) {
+        updateData.country = data.country;
+      }
+      
+      await setDoc(userRef, updateData, { merge: true });
+      console.log('Profile updated successfully');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      throw error;
+    }
   },
 }));

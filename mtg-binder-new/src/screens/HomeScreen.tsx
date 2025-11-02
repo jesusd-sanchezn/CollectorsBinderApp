@@ -84,6 +84,16 @@ export default function HomeScreen({ navigation }: Props) {
             >
               🔄 Trades
             </Button>
+            
+            <Button
+              appearance="filled"
+              status="info"
+              size="large"
+              style={styles.menuItemButton}
+              onPress={() => navigation.navigate('Profile')}
+            >
+              👤 Profile
+            </Button>
           </View>
           
           <Card style={styles.featuresContainer}>

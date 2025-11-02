@@ -40,6 +40,7 @@ import BinderViewScreen from './src/screens/BinderViewScreen';
 import FriendsScreen from './src/screens/FriendsScreen';
 import FriendBindersScreen from './src/screens/FriendBindersScreen';
 import TradeScreen from './src/screens/TradeScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 
 // Import auth store
 import { useAuthStore } from './src/state/useAuthStore';
@@ -56,6 +57,7 @@ export type RootStackParamList = {
   Friends: undefined;
   FriendBinders: { friendId: string; friendName: string };
   Trade: undefined;
+  Profile: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -174,6 +176,11 @@ export default function App() {
                 name="Trade" 
                 component={TradeScreen} 
                 options={{ title: 'Trades' }}
+              />
+              <Stack.Screen 
+                name="Profile" 
+                component={ProfileScreen} 
+                options={{ title: 'Profile' }}
               />
             </>
           ) : (

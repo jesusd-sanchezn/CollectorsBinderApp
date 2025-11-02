@@ -90,4 +90,5 @@ export type RootStackParamList = {
   Friends: undefined;
   FriendBinders: { friendId: string; friendName: string };
   Trade: undefined;
+  Profile: undefined;
 };
