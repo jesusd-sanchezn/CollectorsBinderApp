@@ -1,18 +1,68 @@
-rules_version='2'
-
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2025, 10, 12);
+    
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
+    }
+    
+    // Binders collection
+    match /binders/{binderId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if resource.data.ownerId == request.auth.uid;
+    }
+    
+    // Collection items
+    match /collection-items/{itemId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if request.resource.data.ownerId == request.auth.uid;
+    }
+    
+    // Wishlists
+    match /wishlists/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // Trade sessions
+    match /trade-sessions/{sessionId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // Prices
+    match /prices/{productId} {
+      allow read: if true; // prices are public
+      allow write: if false; // only via functions with admin SDK
+    }
+
+    // Friendships collection
+    match /friendships/{friendshipId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && 
+        (request.auth.uid == resource.data.userId || request.auth.uid == resource.data.friendId);
+    }
+
+    // Friend requests collection
+    match /friendRequests/{requestId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.fromUserId;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.toUserId;
+      allow delete: if isSignedIn();
+    }
+
+    // Trades collection
+    match /trades/{tradeId} {
+      allow read: if isSignedIn() && 
+        (request.auth.uid == resource.data.initiatorId || request.auth.uid == resource.data.recipientId);
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.initiatorId;
+      allow update: if isSignedIn() && 
+        (request.auth.uid == resource.data.initiatorId || request.auth.uid == resource.data.recipientId);
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.initiatorId;
     }
   }
 }
