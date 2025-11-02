@@ -6,10 +6,11 @@ import {
   Platform,
   ScrollView
 } from 'react-native';
-import { Layout, Text, Button, Input, Card, Spinner } from '@ui-kitten/components';
+import { Layout, Text, Button, Input, Card, Spinner, Select, SelectItem, IndexPath } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useAuthStore } from '../state/useAuthStore';
+import { COUNTRIES } from '../lib/countries';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -18,6 +19,7 @@ export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [selectedCountryIndex, setSelectedCountryIndex] = useState<IndexPath | IndexPath[]>(new IndexPath(0));
   const { 
     user, 
     loading, 
@@ -56,7 +58,10 @@ export default function LoginScreen({ navigation }: Props) {
       if (isLogin) {
         await signInWithEmail(email.trim(), password);
       } else {
-        await signUpWithEmail(email.trim(), password);
+        const country = Array.isArray(selectedCountryIndex) 
+          ? COUNTRIES[selectedCountryIndex[0].row] 
+          : COUNTRIES[selectedCountryIndex.row];
+        await signUpWithEmail(email.trim(), password, country);
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Authentication failed');
@@ -128,15 +133,32 @@ export default function LoginScreen({ navigation }: Props) {
             />
             
             {!isLogin && (
-              <Input
-                style={styles.input}
-                placeholder="Confirm Password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                autoCapitalize="none"
-                disabled={loading}
-              />
+              <>
+                <Input
+                  style={styles.input}
+                  placeholder="Confirm Password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  disabled={loading}
+                />
+                
+                <Select
+                  style={styles.input}
+                  placeholder="Select Country"
+                  selectedIndex={selectedCountryIndex}
+                  onSelect={(index) => setSelectedCountryIndex(index)}
+                  value={Array.isArray(selectedCountryIndex) 
+                    ? COUNTRIES[selectedCountryIndex[0].row] 
+                    : COUNTRIES[selectedCountryIndex.row]}
+                  disabled={loading}
+                >
+                  {COUNTRIES.map((country, index) => (
+                    <SelectItem key={index} title={country} />
+                  ))}
+                </Select>
+              </>
             )}
             
             <Button

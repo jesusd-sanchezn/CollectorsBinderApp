@@ -17,7 +17,7 @@ interface AuthState {
   loading: boolean;
   initialized: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, country?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithFacebook: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -25,7 +25,7 @@ interface AuthState {
 }
 
 // Helper function to create or update user document in Firestore
-const createOrUpdateUserDocument = async (user: User) => {
+const createOrUpdateUserDocument = async (user: User, country?: string) => {
   try {
     const userRef = doc(db, 'users', user.uid);
     const userDoc = await getDoc(userRef);
@@ -36,6 +36,7 @@ const createOrUpdateUserDocument = async (user: User) => {
         email: user.email?.toLowerCase(),
         displayName: user.displayName || user.email?.split('@')[0] || 'User',
         avatarUrl: user.photoURL || null,
+        country: country || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -74,12 +75,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  signUpWithEmail: async (email: string, password: string) => {
+  signUpWithEmail: async (email: string, password: string, country?: string) => {
     try {
       set({ loading: true });
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       // Create user document
-      await createOrUpdateUserDocument(userCredential.user);
+      await createOrUpdateUserDocument(userCredential.user, country);
     } catch (error) {
       console.error('Email sign up error:', error);
       throw error;
