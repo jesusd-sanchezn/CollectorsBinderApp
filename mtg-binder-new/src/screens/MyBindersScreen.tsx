@@ -4,7 +4,8 @@ import {
   ScrollView, 
   Modal,
   TouchableOpacity,
-  Image
+  Image,
+  View
 } from 'react-native';
 import { Layout, Text, Button, Input, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -203,46 +204,49 @@ export default function MyBindersScreen({ navigation }: Props) {
                 key={binder.id}
                 style={styles.binderCard}
               >
-                {binder.backgroundImageUrl && (
-                  <Image 
-                    source={{ uri: binder.backgroundImageUrl }} 
-                    style={styles.binderBackground}
-                    resizeMode="cover"
-                  />
-                )}
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => openBinder(binder)}
-                >
-                  <Layout style={styles.binderContent}>
-                    <Layout style={styles.binderHeader}>
-                      <Text category="h6" style={styles.binderName}>{binder.name}</Text>
-                      <Layout style={styles.binderStatus}>
-                        <Text category="c1" style={styles.statusText}>
-                          {binder.isPublic ? 'Public' : 'Private'}
+                <View style={styles.binderWrapper}>
+                  {binder.backgroundImageUrl && (
+                    <Image 
+                      source={{ uri: binder.backgroundImageUrl }} 
+                      style={styles.binderBackground}
+                      resizeMode="cover"
+                    />
+                  )}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => openBinder(binder)}
+                    style={styles.binderTouchable}
+                  >
+                    <Layout style={styles.binderContent}>
+                      <Layout style={styles.binderHeader}>
+                        <Text category="h6" style={styles.binderName}>{binder.name}</Text>
+                        <Layout style={styles.binderStatus}>
+                          <Text category="c1" style={styles.statusText}>
+                            {binder.isPublic ? 'Public' : 'Private'}
+                          </Text>
+                        </Layout>
+                      </Layout>
+                      <Text category="s1" appearance="hint" style={styles.binderDescription}>{binder.description}</Text>
+                      <Layout style={styles.binderStats}>
+                        <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
+                        <Text category="c1" appearance="hint" style={styles.statText}>{cardCount} cards</Text>
+                        <Text category="c1" appearance="hint" style={styles.statText}>
+                          ${totalValue.toFixed(2)}
+                        </Text>
+                        <Text category="c1" appearance="hint" style={styles.statText}>
+                          Updated {formatFirebaseTimestamp(binder.updatedAt)}
                         </Text>
                       </Layout>
                     </Layout>
-                    <Text category="s1" appearance="hint" style={styles.binderDescription}>{binder.description}</Text>
-                    <Layout style={styles.binderStats}>
-                      <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
-                      <Text category="c1" appearance="hint" style={styles.statText}>{cardCount} cards</Text>
-                      <Text category="c1" appearance="hint" style={styles.statText}>
-                        ${totalValue.toFixed(2)}
-                      </Text>
-                      <Text category="c1" appearance="hint" style={styles.statText}>
-                        Updated {formatFirebaseTimestamp(binder.updatedAt)}
-                      </Text>
-                    </Layout>
-                  </Layout>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.editIcon}
-                  onPress={() => handleEditBackground(binder)}
-                  activeOpacity={0.7}
-                >
-                  <Text category="h4">✏️</Text>
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.editIcon}
+                    onPress={() => handleEditBackground(binder)}
+                    activeOpacity={0.7}
+                  >
+                    <Text category="h4">✏️</Text>
+                  </TouchableOpacity>
+                </View>
               </Card>
             );
           })
@@ -425,8 +429,11 @@ const styles = StyleSheet.create({
   },
   binderCard: {
     marginBottom: 12,
+  },
+  binderWrapper: {
     position: 'relative',
     overflow: 'hidden',
+    minHeight: 100,
   },
   binderBackground: {
     position: 'absolute',
@@ -436,10 +443,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     opacity: 0.3,
   },
-  binderContent: {
-    padding: 16,
+  binderTouchable: {
     position: 'relative',
     zIndex: 1,
+  },
+  binderContent: {
+    padding: 16,
   },
   editIcon: {
     position: 'absolute',
