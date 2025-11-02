@@ -13,10 +13,12 @@ import {
   Image 
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList, Binder, BinderPage, BinderSlot, Card } from '../types';
+import { RootStackParamList, Binder, BinderPage, BinderSlot, Card, TradeItem } from '../types';
 import { BinderService } from '../lib/binderService';
 import { CSVParser } from '../lib/csvParser';
 import { useAuthStore } from '../state/useAuthStore';
+import { TradeService } from '../lib/tradeService';
+import { NotificationService } from '../lib/notificationService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BinderView'>;
 
@@ -35,6 +37,12 @@ export default function BinderViewScreen({ route }: Props) {
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [selectedCardSlot, setSelectedCardSlot] = useState<{pageNumber: number, slotPosition: number} | null>(null);
+  
+  // Trade selection state (only when viewing friend's binder)
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedCardsForTrade, setSelectedCardsForTrade] = useState<Map<string, {card: Card, pageNumber: number, slotPosition: number}>>(new Map());
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [creatingTrade, setCreatingTrade] = useState(false);
   
   // Determine if current user is the owner
   const isOwner = user?.uid === ownerId;
@@ -199,9 +207,106 @@ export default function BinderViewScreen({ route }: Props) {
   };
 
   const handleCardPress = (card: Card, pageNumber: number, slotPosition: number) => {
+    // In selection mode, toggle card selection instead of opening modal
+    if (selectionMode && !isOwner) {
+      toggleCardSelection(card, pageNumber, slotPosition);
+      return;
+    }
+    
+    // Normal behavior: open card modal
     setSelectedCard(card);
     setSelectedCardSlot({ pageNumber, slotPosition });
     setShowCardModal(true);
+  };
+
+  // Toggle selection mode (for viewing friend's binders)
+  const toggleSelectionMode = () => {
+    if (isOwner) return; // Can't select from own binder
+    
+    setSelectionMode(!selectionMode);
+    if (!selectionMode) {
+      // Entering selection mode - clear previous selections
+      setSelectedCardsForTrade(new Map());
+    }
+  };
+
+  // Toggle card selection for trade
+  const toggleCardSelection = (card: Card, pageNumber: number, slotPosition: number) => {
+    const cardKey = `${pageNumber}-${slotPosition}`;
+    const newSelections = new Map(selectedCardsForTrade);
+    
+    if (newSelections.has(cardKey)) {
+      newSelections.delete(cardKey);
+    } else {
+      newSelections.set(cardKey, { card, pageNumber, slotPosition });
+    }
+    
+    setSelectedCardsForTrade(newSelections);
+  };
+
+  // Check if card is selected
+  const isCardSelected = (pageNumber: number, slotPosition: number): boolean => {
+    const cardKey = `${pageNumber}-${slotPosition}`;
+    return selectedCardsForTrade.has(cardKey);
+  };
+
+  // Confirm trade and send notification
+  const handleConfirmTrade = async () => {
+    if (!user || selectedCardsForTrade.size === 0) {
+      Alert.alert('Error', 'Please select at least one card');
+      return;
+    }
+
+    try {
+      setCreatingTrade(true);
+
+      // Convert selected cards to TradeItems
+      const wants: TradeItem[] = Array.from(selectedCardsForTrade.values()).map((item, index) => ({
+        id: `item-${Date.now()}-${index}`,
+        cardId: item.card.id,
+        card: item.card,
+        quantity: item.card.quantity || 1,
+        notes: ''
+      }));
+
+      // Create trade in Firebase
+      const tradeId = await TradeService.createTrade(
+        ownerId,
+        ownerName,
+        wants,
+        [] // No offers for now
+      );
+
+      // Send notification to binder owner
+      await NotificationService.notifyTradeRequest(
+        user.displayName || user.email?.split('@')[0] || 'Someone',
+        tradeId,
+        wants.length
+      );
+
+      // Success!
+      Alert.alert(
+        'Trade Request Sent!',
+        `Your trade request for ${wants.length} card${wants.length === 1 ? '' : 's'} has been sent to ${ownerName}. They will receive a notification.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Reset selection
+              setSelectionMode(false);
+              setSelectedCardsForTrade(new Map());
+              setShowConfirmModal(false);
+            }
+          }
+        ]
+      );
+
+    } catch (error) {
+      console.error('Error creating trade:', error);
+      Alert.alert('Error', 'Failed to create trade request. Please try again.');
+    } finally {
+      setCreatingTrade(false);
+    }
   };
 
   const handleRearrangeCards = async () => {
@@ -237,40 +342,27 @@ export default function BinderViewScreen({ route }: Props) {
   };
 
   const handleMarkForTrade = async () => {
-    if (!selectedCard || !user) return;
+    if (!selectedCard || !selectedCardSlot || !user || isOwner) return;
 
     try {
+      // Add card to selection
+      toggleCardSelection(selectedCard, selectedCardSlot.pageNumber, selectedCardSlot.slotPosition);
+      
+      // Enter selection mode if not already
+      if (!selectionMode) {
+        setSelectionMode(true);
+      }
+      
+      setShowCardModal(false);
+      
       Alert.alert(
-        'Mark for Trade',
-        `Mark "${selectedCard.name}" for trading with ${ownerName}?`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Mark for Trade',
-            onPress: async () => {
-              try {
-                // TODO: Implement trade request creation
-                // For now, just show a success message
-                Alert.alert(
-                  'Trade Request', 
-                  `You've marked "${selectedCard.name}" for trading with ${ownerName}. Trade requests feature coming soon!`
-                );
-                setShowCardModal(false);
-                setSelectedCard(null);
-                setSelectedCardSlot(null);
-              } catch (error) {
-                console.error('Error marking card for trade:', error);
-                Alert.alert('Error', 'Failed to mark card for trade');
-              }
-            },
-          },
-        ]
+        'Card Added',
+        `"${selectedCard.name}" has been added to your trade selection. Use "Review" to confirm.`,
+        [{ text: 'OK' }]
       );
     } catch (error) {
-      console.error('Error in mark for trade confirmation:', error);
+      console.error('Error adding card to selection:', error);
+      Alert.alert('Error', 'Failed to add card to selection');
     }
   };
 
@@ -334,11 +426,24 @@ export default function BinderViewScreen({ route }: Props) {
       );
     }
 
+    const isSelected = isCardSelected(pageNumber, slot.position);
+    const showSelectionUI = selectionMode && !isOwner;
+
     return (
       <TouchableOpacity 
-        style={styles.cardSlot}
+        style={[
+          styles.cardSlot,
+          showSelectionUI && styles.cardSlotSelectionMode,
+          isSelected && styles.cardSlotSelected
+        ]}
         onPress={() => handleCardPress(slot.card!, pageNumber, slot.position)}
       >
+        {/* Selection Checkbox Overlay */}
+        {showSelectionUI && (
+          <View style={[styles.selectionCheckbox, isSelected && styles.selectionCheckboxSelected]}>
+            {isSelected && <Text style={styles.selectionCheckmark}>✓</Text>}
+          </View>
+        )}
         {/* Card Name at Top */}
         <View style={styles.cardNameContainer}>
           <Text style={styles.cardNameText} numberOfLines={2}>
@@ -448,6 +553,28 @@ export default function BinderViewScreen({ route }: Props) {
             >
               <Text style={styles.actionButtonText}>🔄 Rearrange</Text>
             </TouchableOpacity>
+          </View>
+        )}
+        {!isOwner && (
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[styles.actionButton, selectionMode && styles.actionButtonActive]}
+              onPress={toggleSelectionMode}
+            >
+              <Text style={styles.actionButtonText}>
+                {selectionMode ? '✕ Cancel' : '✓ Select Cards'}
+              </Text>
+            </TouchableOpacity>
+            {selectionMode && selectedCardsForTrade.size > 0 && (
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.reviewButton]}
+                onPress={() => setShowConfirmModal(true)}
+              >
+                <Text style={styles.actionButtonText}>
+                  📋 Review ({selectedCardsForTrade.size})
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -581,6 +708,68 @@ export default function BinderViewScreen({ route }: Props) {
               </Text>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Trade Confirmation Modal */}
+      <Modal
+        visible={showConfirmModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowConfirmModal(false)}>
+              <Text style={styles.cancelButton}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Review Trade Selection</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <Text style={styles.confirmInstructions}>
+              You are requesting {selectedCardsForTrade.size} card{selectedCardsForTrade.size === 1 ? '' : 's'} from {ownerName}'s binder.
+              A notification will be sent once you confirm.
+            </Text>
+
+            <Text style={styles.confirmSubtitle}>Selected Cards:</Text>
+            
+            {Array.from(selectedCardsForTrade.values()).map((item, index) => (
+              <View key={index} style={styles.selectedCardItem}>
+                <Image 
+                  source={{ uri: item.card.imageUrl }} 
+                  style={styles.selectedCardImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.selectedCardInfo}>
+                  <Text style={styles.selectedCardName}>{item.card.name}</Text>
+                  <Text style={styles.selectedCardSet}>{item.card.set} ({item.card.setCode})</Text>
+                  <Text style={styles.selectedCardCondition}>
+                    {item.card.condition} • {item.card.finish}
+                    {item.card.price && ` • $${item.card.price}`}
+                  </Text>
+                </View>
+              </View>
+            ))}
+
+            <View style={styles.confirmFooter}>
+              <TouchableOpacity 
+                style={[styles.confirmButton, creatingTrade && styles.disabledButton]}
+                onPress={handleConfirmTrade}
+                disabled={creatingTrade}
+              >
+                {creatingTrade ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+                    <Text style={styles.confirmButtonText}>Creating Trade...</Text>
+                  </>
+                ) : (
+                  <Text style={styles.confirmButtonText}>✓ Confirm Trade Request</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -1127,5 +1316,111 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Selection Mode Styles
+  cardSlotSelectionMode: {
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  cardSlotSelected: {
+    borderColor: '#4CAF50',
+    borderWidth: 3,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+  },
+  selectionCheckbox: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#fff',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  selectionCheckboxSelected: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  selectionCheckmark: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  actionButtonActive: {
+    backgroundColor: '#4CAF50',
+  },
+  reviewButton: {
+    backgroundColor: '#2196F3',
+  },
+  // Confirmation Modal Styles
+  confirmInstructions: {
+    fontSize: 16,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+  },
+  confirmSubtitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 15,
+    marginTop: 10,
+  },
+  selectedCardItem: {
+    flexDirection: 'row',
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  selectedCardImage: {
+    width: 60,
+    height: 84,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  selectedCardInfo: {
+    flex: 1,
+  },
+  selectedCardName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  selectedCardSet: {
+    fontSize: 12,
+    color: '#ccc',
+    marginBottom: 4,
+  },
+  selectedCardCondition: {
+    fontSize: 12,
+    color: '#888',
+  },
+  confirmFooter: {
+    paddingVertical: 20,
+    paddingTop: 30,
+  },
+  confirmButton: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });

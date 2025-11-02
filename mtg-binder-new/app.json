@@ -7,6 +7,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#4CAF50",
+      "iosDisplayInForeground": true,
+      "androidMode": "default"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",

@@ -13,6 +13,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
+import { NotificationService } from './notificationService';
 
 export interface Friend {
   id: string;
@@ -190,6 +191,16 @@ export class FriendsService {
       await addDoc(collection(db, 'friendships'), friendshipData2);
       
       console.log(`Friend request accepted from ${requestData.fromUserEmail}`);
+      
+      // Send notification to the person who sent the request
+      try {
+        const currentUser = auth.currentUser;
+        const senderName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
+        await NotificationService.notifyFriendAccepted(senderName, requestData.fromUserId);
+      } catch (notificationError) {
+        console.error('Error sending notification:', notificationError);
+        // Don't fail the entire operation if notification fails
+      }
     } catch (error) {
       console.error('Error accepting friend request:', error);
       throw error;

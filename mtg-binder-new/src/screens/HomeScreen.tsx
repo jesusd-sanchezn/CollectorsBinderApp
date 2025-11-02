@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'rea
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useAuthStore } from '../state/useAuthStore';
+import { testSimpleNotification } from '../lib/testNotifications';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -28,6 +29,16 @@ export default function HomeScreen({ navigation }: Props) {
         }
       ]
     );
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      await testSimpleNotification();
+      Alert.alert('Success', 'Test notification sent! Check your notification tray.');
+    } catch (error) {
+      console.error('Test notification error:', error);
+      Alert.alert('Error', 'Failed to send test notification. Check console for details.');
+    }
   };
 
   return (
@@ -72,6 +83,15 @@ export default function HomeScreen({ navigation }: Props) {
             <Text style={styles.menuIcon}>🔄</Text>
             <Text style={styles.menuTitle}>Trades</Text>
             <Text style={styles.menuDescription}>Manage your trades</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={handleTestNotification}
+          >
+            <Text style={styles.menuIcon}>🔔</Text>
+            <Text style={styles.menuTitle}>Test Notifications</Text>
+            <Text style={styles.menuDescription}>Test notification system</Text>
           </TouchableOpacity>
         </View>
         

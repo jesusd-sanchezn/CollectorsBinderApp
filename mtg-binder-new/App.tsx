@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +16,10 @@ import TradeScreen from './src/screens/TradeScreen';
 // Import auth store
 import { useAuthStore } from './src/state/useAuthStore';
 
+// Import notification service
+import { NotificationService } from './src/lib/notificationService';
+import * as Notifications from 'expo-notifications';
+
 export type RootStackParamList = {
   Login: undefined;
   Home: undefined;
@@ -30,11 +34,54 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   const { user, initialized, initializeAuth } = useAuthStore();
+  const notificationListener = useRef<Notifications.Subscription>();
+  const responseListener = useRef<Notifications.Subscription>();
 
   useEffect(() => {
     const unsubscribe = initializeAuth();
     return unsubscribe;
   }, [initializeAuth]);
+
+  // Initialize notification listeners
+  useEffect(() => {
+    // Request permissions when app starts
+    const initNotifications = async () => {
+      if (user) {
+        // Request permissions for local notifications
+        // Push notifications require development build, not Expo Go
+        await NotificationService.requestPermissions();
+      }
+    };
+
+    initNotifications();
+
+    // Listener for notifications received while app is in foreground
+    notificationListener.current = NotificationService.addNotificationReceivedListener(
+      notification => {
+        console.log('Notification received:', notification);
+      }
+    );
+
+    // Listener for when user taps on notification
+    responseListener.current = NotificationService.addNotificationResponseListener(
+      response => {
+        console.log('Notification response:', response);
+        const data = response.notification.request.content.data;
+        
+        // Handle navigation based on notification type
+        // This will be expanded when we have proper navigation context
+      }
+    );
+
+    return () => {
+      if (notificationListener.current) {
+        NotificationService.removeNotificationSubscription(notificationListener.current);
+      }
+      if (responseListener.current) {
+        NotificationService.removeNotificationSubscription(responseListener.current);
+      }
+    };
+  }, [user]);
 
   if (!initialized) {
     return (
