@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, 
-  Text, 
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
   Alert, 
   Modal,
-  TextInput,
-  ActivityIndicator,
   Dimensions,
-  Image 
+  Image,
+  View
 } from 'react-native';
+import { Layout, Text, Button, Input, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Binder, BinderPage, BinderSlot, Card, TradeItem } from '../types';
 import { BinderService } from '../lib/binderService';
@@ -514,127 +512,113 @@ export default function BinderViewScreen({ route }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4CAF50" />
-        <Text style={styles.loadingText}>Loading binder...</Text>
-      </View>
+      <Layout style={styles.loadingContainer}>
+        <Spinner size="large" status="primary" />
+        <Text category="s1" appearance="hint" style={styles.loadingText}>Loading binder...</Text>
+      </Layout>
     );
   }
 
   if (!binder) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Binder not found</Text>
-      </View>
+      <Layout style={styles.errorContainer}>
+        <Text category="h5" status="danger">Binder not found</Text>
+      </Layout>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{binder.name}</Text>
+    <Layout style={styles.container}>
+      <Layout style={styles.header} level="2">
+        {/* Title Row */}
+        <Layout style={styles.headerTitleRow}>
+          <Text category="h5" style={styles.title}>{binder.name}</Text>
+        </Layout>
+        
+        {/* Action Buttons Row */}
         {isOwner && (
-          <View style={styles.headerActions}>
-            <TouchableOpacity 
+          <Layout style={styles.headerActions}>
+            <Button 
+              status="primary"
+              size="small"
               style={styles.actionButton}
               onPress={() => setShowImportModal(true)}
             >
-              <Text style={styles.actionButtonText}>📥 Import</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
+              📥 Import
+            </Button>
+            <Button 
+              status="primary"
+              size="small"
               style={styles.actionButton}
               onPress={addPage}
             >
-              <Text style={styles.actionButtonText}>📄 Add Page</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
+              📄 Add Page
+            </Button>
+            <Button 
+              status="primary"
+              size="small"
               style={styles.actionButton}
               onPress={handleRearrangeCards}
             >
-              <Text style={styles.actionButtonText}>🔄 Rearrange</Text>
-            </TouchableOpacity>
-          </View>
+              🔄 Rearrange
+            </Button>
+          </Layout>
         )}
         {!isOwner && (
-          <View style={styles.headerActions}>
-            <TouchableOpacity 
-              style={[styles.actionButton, selectionMode && styles.actionButtonActive]}
+          <Layout style={styles.headerActions}>
+            <Button 
+              status={selectionMode ? "danger" : "success"}
+              size="small"
+              style={styles.actionButton}
               onPress={toggleSelectionMode}
             >
-              <Text style={styles.actionButtonText}>
-                {selectionMode ? '✕ Cancel' : '✓ Select Cards'}
-              </Text>
-            </TouchableOpacity>
+              {selectionMode ? '✕ Cancel' : '✓ Select Cards'}
+            </Button>
             {selectionMode && selectedCardsForTrade.size > 0 && (
-              <TouchableOpacity 
-                style={[styles.actionButton, styles.reviewButton]}
+              <Button 
+                status="info"
+                size="small"
+                style={styles.actionButton}
                 onPress={() => setShowConfirmModal(true)}
               >
-                <Text style={styles.actionButtonText}>
-                  📋 Review ({selectedCardsForTrade.size})
-                </Text>
-              </TouchableOpacity>
+                📋 Review ({selectedCardsForTrade.size})
+              </Button>
             )}
-          </View>
+          </Layout>
         )}
-      </View>
+      </Layout>
 
-      <View style={styles.binderContent}>
+      <Layout style={styles.binderContent}>
+        {/* Current Page Display */}
+        <Layout style={styles.currentPageContainer}>
+          {renderPage(binder.pages[currentPage])}
+        </Layout>
+
         {/* Page Navigation */}
-        <View style={styles.pageNavigation}>
-          <TouchableOpacity 
-            style={[styles.navButton, currentPage === 0 && styles.navButtonDisabled]}
-            onPress={() => setCurrentPage(Math.max(0, currentPage - 1))}
+        <Layout style={styles.pageNavigation} level="2">
+          <Button 
+            status="primary"
+            size="small"
             disabled={currentPage === 0}
+            onPress={() => setCurrentPage(Math.max(0, currentPage - 1))}
           >
-            <Text style={[styles.navButtonText, currentPage === 0 && styles.navButtonTextDisabled]}>
-              ← Previous
-            </Text>
-          </TouchableOpacity>
+            ← Previous
+          </Button>
           
-          <Text style={styles.pageIndicator}>
+          <Text category="s1" style={styles.pageIndicator}>
             Page {currentPage + 1} of {binder.pages.length}
           </Text>
           
-          <TouchableOpacity 
-            style={[styles.navButton, currentPage >= binder.pages.length - 1 && styles.navButtonDisabled]}
-            onPress={() => setCurrentPage(Math.min(binder.pages.length - 1, currentPage + 1))}
+          <Button 
+            status="primary"
+            size="small"
             disabled={currentPage >= binder.pages.length - 1}
+            onPress={() => setCurrentPage(Math.min(binder.pages.length - 1, currentPage + 1))}
           >
-            <Text style={[styles.navButtonText, currentPage >= binder.pages.length - 1 && styles.navButtonTextDisabled]}>
-              Next →
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Current Page Display */}
-        <View style={styles.currentPageContainer}>
-          {renderPage(binder.pages[currentPage])}
-        </View>
-
-        {/* Page Thumbnails */}
-        <View style={styles.pageThumbnails}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {binder.pages.map((page, index) => (
-              <TouchableOpacity
-                key={page.id}
-                style={[
-                  styles.thumbnail,
-                  index === currentPage && styles.thumbnailActive
-                ]}
-                onPress={() => setCurrentPage(index)}
-              >
-                <Text style={[
-                  styles.thumbnailText,
-                  index === currentPage && styles.thumbnailTextActive
-                ]}>
-                  {index + 1}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
+            Next →
+          </Button>
+        </Layout>
+      </Layout>
 
       {/* CSV Import Modal */}
       <Modal
@@ -642,36 +626,45 @@ export default function BinderViewScreen({ route }: Props) {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowImportModal(false)}>
-              <Text style={styles.cancelButton}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Import Cards from CSV</Text>
-            <TouchableOpacity onPress={importCSV} disabled={importing}>
-              <Text style={[styles.importButton, importing && styles.disabledButton]}>
-                {importing ? 'Importing...' : 'Import'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <Layout style={styles.modalContainer}>
+          <Layout style={styles.modalHeader} level="2">
+            <Button
+              appearance="ghost"
+              status="basic"
+              size="small"
+              onPress={() => setShowImportModal(false)}
+            >
+              Cancel
+            </Button>
+            <Text category="h6" style={styles.modalTitle}>Import Cards from CSV</Text>
+            <Button
+              status="success"
+              size="small"
+              onPress={importCSV}
+              disabled={importing}
+              accessoryLeft={importing ? () => <Spinner size="small" status="control" /> : undefined}
+            >
+              {importing ? 'Importing...' : 'Import'}
+            </Button>
+          </Layout>
 
           {/* Loading Overlay */}
           {importing && (
-            <View style={styles.loadingOverlay}>
-              <View style={styles.loadingContent}>
-                <ActivityIndicator size="large" color="#4CAF50" />
-                <Text style={styles.loadingText}>Fetching card images from Scryfall...</Text>
-                <Text style={styles.loadingSubtext}>This may take a few minutes</Text>
-              </View>
-            </View>
+            <Layout style={styles.loadingOverlay}>
+              <Layout style={styles.loadingContent}>
+                <Spinner size="large" status="primary" />
+                <Text category="s1" appearance="hint" style={styles.loadingText}>Fetching card images from Scryfall...</Text>
+                <Text category="s1" appearance="hint" style={styles.loadingSubtext}>This may take a few minutes</Text>
+              </Layout>
+            </Layout>
           )}
 
-          <View style={styles.modalContent}>
-            <Text style={styles.instructionsTitle}>📋 CSV Import Instructions</Text>
-            <Text style={styles.instructionsText}>
+          <Layout style={styles.modalContent}>
+            <Text category="h6" style={styles.instructionsTitle}>📋 CSV Import Instructions</Text>
+            <Text category="s1" appearance="hint" style={styles.instructionsText}>
               Paste your DelverLens CSV export here. The format should include:
             </Text>
-            <Text style={styles.instructionsList}>
+            <Text category="s1" appearance="hint" style={styles.instructionsList}>
               • Card Name (required){'\n'}
               • Set Name (required){'\n'}
               • Quantity (required){'\n'}
@@ -679,36 +672,36 @@ export default function BinderViewScreen({ route }: Props) {
               • Finish (optional, defaults to nonfoil)
             </Text>
             
-            <View style={styles.sampleBox}>
-              <Text style={styles.sampleTitle}>📝 Sample CSV Format:</Text>
-              <Text style={styles.sampleText}>
+            <Layout style={styles.sampleBox} level="3">
+              <Text category="s1" style={styles.sampleTitle}>📝 Sample CSV Format:</Text>
+              <Text category="s1" appearance="hint" style={styles.sampleText}>
                 Card Name,Set Name,Quantity,Condition,Finish{'\n'}
                 Lightning Bolt,Magic 2010,4,NM,nonfoil{'\n'}
                 Counterspell,Magic 2010,2,LP,foil
               </Text>
-            </View>
+            </Layout>
 
-            <TextInput
+            <Input
               style={styles.csvInput}
               value={csvData}
               onChangeText={setCsvData}
               placeholder="Paste your CSV data here..."
-              placeholderTextColor="#666"
-              multiline
-              numberOfLines={10}
+              multiline={true}
+              disabled={importing}
+              textStyle={styles.csvInputText}
             />
 
-            <View style={styles.infoBox}>
-              <Text style={styles.infoTitle}>💡 Tips</Text>
-              <Text style={styles.infoText}>
+            <Layout style={styles.infoBox} level="3">
+              <Text category="h6" style={styles.infoTitle}>💡 Tips</Text>
+              <Text category="s1" appearance="hint" style={styles.infoText}>
                 • Use DelverLens app to scan your cards{'\n'}
                 • Export as CSV from DelverLens{'\n'}
                 • Cards will be automatically priced{'\n'}
                 • Empty slots will be filled automatically
               </Text>
-            </View>
-          </View>
-        </View>
+            </Layout>
+          </Layout>
+        </Layout>
       </Modal>
 
       {/* Trade Confirmation Modal */}
@@ -718,59 +711,60 @@ export default function BinderViewScreen({ route }: Props) {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowConfirmModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowConfirmModal(false)}>
-              <Text style={styles.cancelButton}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Review Trade Selection</Text>
-            <View style={{ width: 60 }} />
-          </View>
+        <Layout style={styles.modalContainer}>
+          <Layout style={styles.modalHeader} level="2">
+            <Button
+              appearance="ghost"
+              status="basic"
+              size="small"
+              onPress={() => setShowConfirmModal(false)}
+            >
+              Cancel
+            </Button>
+            <Text category="h6" style={styles.modalTitle}>Review Trade Selection</Text>
+            <Layout style={{ width: 60 }} />
+          </Layout>
 
           <ScrollView style={styles.modalContent}>
-            <Text style={styles.confirmInstructions}>
+            <Text category="s1" appearance="hint" style={styles.confirmInstructions}>
               You are requesting {selectedCardsForTrade.size} card{selectedCardsForTrade.size === 1 ? '' : 's'} from {ownerName}'s binder.
               A notification will be sent once you confirm.
             </Text>
 
-            <Text style={styles.confirmSubtitle}>Selected Cards:</Text>
+            <Text category="h6" style={styles.confirmSubtitle}>Selected Cards:</Text>
             
             {Array.from(selectedCardsForTrade.values()).map((item, index) => (
-              <View key={index} style={styles.selectedCardItem}>
+              <Layout key={index} style={styles.selectedCardItem} level="3">
                 <Image 
                   source={{ uri: item.card.imageUrl }} 
                   style={styles.selectedCardImage}
                   resizeMode="contain"
                 />
-                <View style={styles.selectedCardInfo}>
-                  <Text style={styles.selectedCardName}>{item.card.name}</Text>
-                  <Text style={styles.selectedCardSet}>{item.card.set} ({item.card.setCode})</Text>
-                  <Text style={styles.selectedCardCondition}>
+                <Layout style={styles.selectedCardInfo}>
+                  <Text category="s1" style={styles.selectedCardName}>{item.card.name}</Text>
+                  <Text category="s1" appearance="hint" style={styles.selectedCardSet}>{item.card.set} ({item.card.setCode})</Text>
+                  <Text category="c1" appearance="hint" style={styles.selectedCardCondition}>
                     {item.card.condition} • {item.card.finish}
                     {item.card.price && ` • $${item.card.price}`}
                   </Text>
-                </View>
-              </View>
+                </Layout>
+              </Layout>
             ))}
 
-            <View style={styles.confirmFooter}>
-              <TouchableOpacity 
-                style={[styles.confirmButton, creatingTrade && styles.disabledButton]}
+            <Layout style={styles.confirmFooter}>
+              <Button 
+                status="success"
+                size="large"
+                style={styles.confirmButton}
                 onPress={handleConfirmTrade}
                 disabled={creatingTrade}
+                accessoryLeft={creatingTrade ? () => <Spinner size="small" status="control" /> : undefined}
               >
-                {creatingTrade ? (
-                  <>
-                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
-                    <Text style={styles.confirmButtonText}>Creating Trade...</Text>
-                  </>
-                ) : (
-                  <Text style={styles.confirmButtonText}>✓ Confirm Trade Request</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+                {creatingTrade ? 'Creating Trade...' : '✓ Confirm Trade Request'}
+              </Button>
+            </Layout>
           </ScrollView>
-        </View>
+        </Layout>
       </Modal>
 
       {/* Card Detail Modal */}
@@ -780,128 +774,127 @@ export default function BinderViewScreen({ route }: Props) {
         transparent={true}
         onRequestClose={() => setShowCardModal(false)}
       >
-        <View style={styles.cardModalOverlay}>
+        <Layout style={styles.cardModalOverlay}>
           <TouchableOpacity 
             style={styles.cardModalBackground}
             onPress={() => setShowCardModal(false)}
             activeOpacity={1}
           >
-            <View style={styles.cardModalContent}>
-              <TouchableOpacity 
+            <Layout style={styles.cardModalContent} level="3">
+              <Button
+                appearance="ghost"
+                status="basic"
+                size="small"
                 style={styles.cardModalCloseButton}
                 onPress={() => setShowCardModal(false)}
               >
-                <Text style={styles.cardModalCloseText}>✕</Text>
-              </TouchableOpacity>
+                ✕
+              </Button>
               
               {selectedCard && (
-                <View style={styles.cardDetailContainer}>
+                <Layout style={styles.cardDetailContainer}>
                   <Image 
                     source={{ uri: selectedCard.imageUrl }} 
                     style={styles.cardDetailImage}
                     resizeMode="contain"
                   />
                   
-                  <View style={styles.cardDetailInfo}>
-                    <Text style={styles.cardDetailName}>{selectedCard.name}</Text>
-                    <Text style={styles.cardDetailSet}>{selectedCard.set} ({selectedCard.setCode})</Text>
+                  <Layout style={styles.cardDetailInfo}>
+                    <Text category="h6" style={styles.cardDetailName}>{selectedCard.name}</Text>
+                    <Text category="s1" appearance="hint" style={styles.cardDetailSet}>{selectedCard.set} ({selectedCard.setCode})</Text>
                     
-                    <View style={styles.cardDetailStats}>
-                      <View style={styles.cardDetailStat}>
-                        <Text style={styles.cardDetailStatLabel}>Condition:</Text>
-                        <Text style={styles.cardDetailStatValue}>{selectedCard.condition}</Text>
-                      </View>
-                      <View style={styles.cardDetailStat}>
-                        <Text style={styles.cardDetailStatLabel}>Finish:</Text>
-                        <Text style={styles.cardDetailStatValue}>{selectedCard.finish}</Text>
-                      </View>
-                      <View style={styles.cardDetailStat}>
-                        <Text style={styles.cardDetailStatLabel}>Quantity:</Text>
-                        <Text style={styles.cardDetailStatValue}>{selectedCard.quantity}</Text>
-                      </View>
+                    <Layout style={styles.cardDetailStats}>
+                      <Layout style={styles.cardDetailStat}>
+                        <Text category="c1" appearance="hint" style={styles.cardDetailStatLabel}>Condition:</Text>
+                        <Text category="s1" style={styles.cardDetailStatValue}>{selectedCard.condition}</Text>
+                      </Layout>
+                      <Layout style={styles.cardDetailStat}>
+                        <Text category="c1" appearance="hint" style={styles.cardDetailStatLabel}>Finish:</Text>
+                        <Text category="s1" style={styles.cardDetailStatValue}>{selectedCard.finish}</Text>
+                      </Layout>
+                      <Layout style={styles.cardDetailStat}>
+                        <Text category="c1" appearance="hint" style={styles.cardDetailStatLabel}>Quantity:</Text>
+                        <Text category="s1" style={styles.cardDetailStatValue}>{selectedCard.quantity}</Text>
+                      </Layout>
                       {selectedCard.price && (
-                        <View style={styles.cardDetailStat}>
-                          <Text style={styles.cardDetailStatLabel}>Price:</Text>
-                          <Text style={styles.cardDetailPrice}>${selectedCard.price}</Text>
-                        </View>
+                        <Layout style={styles.cardDetailStat}>
+                          <Text category="c1" appearance="hint" style={styles.cardDetailStatLabel}>Price:</Text>
+                          <Text category="s1" status="success" style={styles.cardDetailPrice}>${selectedCard.price}</Text>
+                        </Layout>
                       )}
-                    </View>
+                    </Layout>
                     
                     {/* Action Button - Delete for owner, Mark for Trade for friends */}
                     {isOwner ? (
-                      <TouchableOpacity 
+                      <Button 
+                        status="danger"
+                        size="medium"
                         style={styles.deleteButton}
                         onPress={handleDeleteCard}
                       >
-                        <Text style={styles.deleteButtonText}>🗑️ Delete Card</Text>
-                      </TouchableOpacity>
+                        🗑️ Delete Card
+                      </Button>
                     ) : (
-                      <TouchableOpacity 
+                      <Button 
+                        status="info"
+                        size="medium"
                         style={styles.tradeButton}
                         onPress={handleMarkForTrade}
                       >
-                        <Text style={styles.tradeButtonText}>🔄 Mark for Trade</Text>
-                      </TouchableOpacity>
+                        🔄 Mark for Trade
+                      </Button>
                     )}
-                  </View>
-                </View>
+                  </Layout>
+                </Layout>
               )}
-            </View>
+            </Layout>
           </TouchableOpacity>
-        </View>
+        </Layout>
       </Modal>
-    </View>
+    </Layout>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
   },
   loadingText: {
-    color: '#ccc',
     marginTop: 10,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
   },
   errorText: {
-    color: '#ff6b6b',
     fontSize: 18,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
+  headerTitleRow: {
+    marginBottom: 10,
+  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
-    flex: 1,
   },
   headerActions: {
     flexDirection: 'row',
     gap: 10,
   },
   actionButton: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    flex: 1,
+    marginHorizontal: 2,
   },
   actionButtonText: {
     color: '#fff',
@@ -950,31 +943,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  pageThumbnails: {
-    paddingVertical: 8, // Reduced from 15 to 8
-    borderTopWidth: 1,
-    borderTopColor: '#333',
-  },
-  thumbnail: {
-    width: 32, // Reduced from 40 to 32
-    height: 32, // Reduced from 40 to 32
-    borderRadius: 16, // Reduced from 20 to 16
-    backgroundColor: '#333',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 3, // Reduced from 5 to 3
-  },
-  thumbnailActive: {
-    backgroundColor: '#4CAF50',
-  },
-  thumbnailText: {
-    color: '#ccc',
-    fontSize: 12, // Reduced from 14 to 12
-    fontWeight: 'bold',
-  },
-  thumbnailTextActive: {
-    color: '#fff',
-  },
   pageGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -989,7 +957,6 @@ const styles = StyleSheet.create({
   },
   cardSlot: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#333',
@@ -1084,7 +1051,6 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1133,13 +1099,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#2a2a2a',
     borderRadius: 8,
     padding: 12,
-    fontSize: 14,
-    color: '#fff',
     borderWidth: 1,
     borderColor: '#333',
     textAlignVertical: 'top',
     height: 200,
     marginBottom: 20,
+  },
+  csvInputText: {
+    fontSize: 14,
+    color: '#fff',
+    minHeight: 200,
   },
   infoBox: {
     backgroundColor: '#2a2a2a',
@@ -1242,7 +1211,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   cardDetailStats: {
-    backgroundColor: '#1a1a1a',
     borderRadius: 8,
     padding: 15,
   },

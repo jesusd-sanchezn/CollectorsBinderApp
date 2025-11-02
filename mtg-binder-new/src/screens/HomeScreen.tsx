@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { StyleSheet, ScrollView, Alert, TouchableOpacity, View } from 'react-native';
+import { Layout, Text, Button, Card } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useAuthStore } from '../state/useAuthStore';
@@ -42,87 +43,100 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.welcome}>Welcome to MTG Binder!</Text>
-            <Text style={styles.userEmail}>{user?.email}</Text>
-          </View>
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.description}>
-          Your digital Magic: The Gathering collection manager
-        </Text>
-        
-        <View style={styles.menuContainer}>
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('MyBinders')}
-          >
-            <Text style={styles.menuIcon}>📚</Text>
-            <Text style={styles.menuTitle}>My Binders</Text>
-            <Text style={styles.menuDescription}>Manage your card collections</Text>
-          </TouchableOpacity>
+    <Layout style={styles.container}>
+      <ScrollView>
+        <Layout style={styles.content}>
+          <Layout style={styles.header} level="2">
+            <Layout style={styles.headerTextContainer}>
+              <Text category="h2" style={styles.welcome}>Welcome to MTG Binder!</Text>
+              <Text category="s1" status="success" style={styles.userEmail}>{user?.email}</Text>
+            </Layout>
+            <Button 
+              status="danger" 
+              size="small"
+              onPress={handleSignOut}
+              style={styles.signOutButton}
+            >
+              Sign Out
+            </Button>
+          </Layout>
           
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('Friends')}
-          >
-            <Text style={styles.menuIcon}>👥</Text>
-            <Text style={styles.menuTitle}>Friends</Text>
-            <Text style={styles.menuDescription}>View friends' collections</Text>
-          </TouchableOpacity>
+          <Text category="s1" appearance="hint" style={styles.description} center>
+            Your digital Magic: The Gathering collection manager
+          </Text>
           
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => Alert.alert('Coming Soon', 'Trade feature coming soon!')}
-          >
-            <Text style={styles.menuIcon}>🔄</Text>
-            <Text style={styles.menuTitle}>Trades</Text>
-            <Text style={styles.menuDescription}>Manage your trades</Text>
-          </TouchableOpacity>
+          <View style={styles.menuContainer}>
+            <Button
+              appearance="filled"
+              status="primary"
+              size="large"
+              style={styles.menuItemButton}
+              onPress={() => navigation.navigate('MyBinders')}
+            >
+              📚 My Binders
+            </Button>
+            
+            <Button
+              appearance="filled"
+              status="primary"
+              size="large"
+              style={styles.menuItemButton}
+              onPress={() => navigation.navigate('Friends')}
+            >
+              👥 Friends
+            </Button>
+            
+            <Button
+              appearance="filled"
+              status="primary"
+              size="large"
+              style={styles.menuItemButton}
+              onPress={() => Alert.alert('Coming Soon', 'Trade feature coming soon!')}
+            >
+              🔄 Trades
+            </Button>
+            
+            <Button
+              appearance="filled"
+              status="primary"
+              size="large"
+              style={styles.menuItemButton}
+              onPress={handleTestNotification}
+            >
+              🔔 Test Notifications
+            </Button>
+          </View>
           
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={handleTestNotification}
-          >
-            <Text style={styles.menuIcon}>🔔</Text>
-            <Text style={styles.menuTitle}>Test Notifications</Text>
-            <Text style={styles.menuDescription}>Test notification system</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.featuresContainer}>
-          <Text style={styles.featuresTitle}>Features</Text>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureIcon}>📱</Text>
-            <Text style={styles.featureText}>Digital binders with 9-pocket pages</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureIcon}>🔍</Text>
-            <Text style={styles.featureText}>Real-time card pricing</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureIcon}>👥</Text>
-            <Text style={styles.featureText}>Share collections with friends</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureIcon}>🔄</Text>
-            <Text style={styles.featureText}>Digital trade negotiations</Text>
-          </View>
-        </View>
-      </View>
-    </ScrollView>
+          <Card style={styles.featuresContainer}>
+            <Text category="h5" style={styles.featuresTitle} center>Features</Text>
+            <Layout style={styles.featureItem}>
+              <Text category="h4" style={styles.featureIcon}>📱</Text>
+              <Text category="s1" style={styles.featureText}>
+                Digital binders with 9-pocket pages
+              </Text>
+            </Layout>
+            <Layout style={styles.featureItem}>
+              <Text category="h4" style={styles.featureIcon}>🔍</Text>
+              <Text category="s1" style={styles.featureText}>Real-time card pricing</Text>
+            </Layout>
+            <Layout style={styles.featureItem}>
+              <Text category="h4" style={styles.featureIcon}>👥</Text>
+              <Text category="s1" style={styles.featureText}>Share collections with friends</Text>
+            </Layout>
+            <Layout style={styles.featureItem}>
+              <Text category="h4" style={styles.featureIcon}>🔄</Text>
+              <Text category="s1" style={styles.featureText}>Digital trade negotiations</Text>
+            </Layout>
+          </Card>
+        </Layout>
+      </ScrollView>
+    </Layout>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
   },
   content: {
     padding: 20,
@@ -132,71 +146,37 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
+    padding: 16,
     marginBottom: 20,
+    borderRadius: 8,
+  },
+  headerTextContainer: {
+    flex: 1,
+    marginRight: 10,
   },
   welcome: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 5,
   },
   userEmail: {
-    fontSize: 14,
-    color: '#4CAF50',
+    marginTop: 4,
   },
   signOutButton: {
-    backgroundColor: '#ff4444',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  signOutText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    marginLeft: 10,
   },
   description: {
-    fontSize: 16,
-    color: '#ccc',
-    textAlign: 'center',
     marginBottom: 30,
   },
   menuContainer: {
     marginBottom: 30,
   },
-  menuItem: {
-    backgroundColor: '#2a2a2a',
-    padding: 20,
-    borderRadius: 12,
+  menuItemButton: {
     marginBottom: 15,
-    alignItems: 'center',
-  },
-  menuIcon: {
-    fontSize: 32,
-    marginBottom: 10,
-  },
-  menuTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 5,
-  },
-  menuDescription: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
   },
   featuresContainer: {
-    backgroundColor: '#2a2a2a',
     padding: 20,
-    borderRadius: 12,
   },
   featuresTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 15,
-    textAlign: 'center',
   },
   featureItem: {
     flexDirection: 'row',
@@ -204,12 +184,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   featureIcon: {
-    fontSize: 20,
     marginRight: 12,
   },
   featureText: {
-    fontSize: 14,
-    color: '#ccc',
     flex: 1,
   },
 });

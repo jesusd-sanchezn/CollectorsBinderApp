@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, 
-  Text, 
   StyleSheet, 
-  TouchableOpacity, 
   ScrollView, 
   Alert, 
-  TextInput,
   Modal,
-  ActivityIndicator 
+  TouchableOpacity
 } from 'react-native';
+import { Layout, Text, Button, Input, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Binder } from '../types';
 import { BinderService } from '../lib/binderService';
@@ -49,26 +46,26 @@ export default function MyBindersScreen({ navigation }: Props) {
   const [newBinderDescription, setNewBinderDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
+  const loadBinders = async () => {
+    try {
+      setLoading(true);
+      // Update existing binders to be public (one-time migration)
+      await updateAllBindersToPublic();
+      // Load binders from Firebase for current user
+      const userBinders = await BinderService.getUserBinders();
+      setBinders(userBinders || []); // Ensure we always have an array
+    } catch (error) {
+      console.error('Error loading binders:', error);
+      // Don't show error alert for empty results, just set empty array
+      setBinders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadBinders();
   }, []);
-
-          const loadBinders = async () => {
-            try {
-              setLoading(true);
-              // Update existing binders to be public (one-time migration)
-              await updateAllBindersToPublic();
-              // Load binders from Firebase for current user
-              const userBinders = await BinderService.getUserBinders();
-              setBinders(userBinders || []); // Ensure we always have an array
-            } catch (error) {
-              console.error('Error loading binders:', error);
-              // Don't show error alert for empty results, just set empty array
-              setBinders([]);
-            } finally {
-              setLoading(false);
-            }
-          };
 
   const createBinder = async () => {
     if (!newBinderName.trim()) {
@@ -84,11 +81,11 @@ export default function MyBindersScreen({ navigation }: Props) {
         true
       );
       
-              Alert.alert('Success', 'Binder created successfully!');
-              setNewBinderName('');
-              setNewBinderDescription('');
-              setShowCreateModal(false);
-              await loadBinders(); // Reload binders to show the new one
+      Alert.alert('Success', 'Binder created successfully!');
+      setNewBinderName('');
+      setNewBinderDescription('');
+      setShowCreateModal(false);
+      await loadBinders(); // Reload binders to show the new one
     } catch (error) {
       console.error('Error creating binder:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -99,6 +96,7 @@ export default function MyBindersScreen({ navigation }: Props) {
   };
 
   const openBinder = (binder: Binder) => {
+    console.log('Opening binder:', binder.id);
     navigation.navigate('BinderView', {
       binderId: binder.id,
       ownerId: binder.ownerId,
@@ -108,57 +106,64 @@ export default function MyBindersScreen({ navigation }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4CAF50" />
-        <Text style={styles.loadingText}>Loading binders...</Text>
-      </View>
+      <Layout style={styles.loadingContainer}>
+        <Spinner size="large" status="primary" />
+        <Text category="s1" appearance="hint" style={styles.loadingText}>Loading binders...</Text>
+      </Layout>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Binders</Text>
-        <TouchableOpacity 
-          style={styles.createButton}
+    <Layout style={styles.container}>
+      <Layout style={styles.header} level="2">
+        <Text category="h4" style={styles.title}>My Binders</Text>
+        <Button 
+          status="success"
+          size="small"
           onPress={() => setShowCreateModal(true)}
         >
-          <Text style={styles.createButtonText}>+ New Binder</Text>
-        </TouchableOpacity>
-      </View>
+          + New Binder
+        </Button>
+      </Layout>
 
       <ScrollView style={styles.bindersList}>
         {binders.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📚</Text>
-            <Text style={styles.emptyTitle}>No binders yet</Text>
-            <Text style={styles.emptyDescription}>
+          <Layout style={styles.emptyState}>
+            <Text category="h1" style={styles.emptyIcon}>📚</Text>
+            <Text category="h5" style={styles.emptyTitle}>No binders yet</Text>
+            <Text category="s1" appearance="hint" style={styles.emptyDescription} center>
               Create your first binder to start organizing your MTG collection
             </Text>
-          </View>
+          </Layout>
         ) : (
           binders.map((binder) => (
-            <TouchableOpacity
+            <Card
               key={binder.id}
               style={styles.binderCard}
-              onPress={() => openBinder(binder)}
             >
-              <View style={styles.binderHeader}>
-                <Text style={styles.binderName}>{binder.name}</Text>
-                <View style={styles.binderStatus}>
-                  <Text style={styles.statusText}>
-                    {binder.isPublic ? 'Public' : 'Private'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.binderDescription}>{binder.description}</Text>
-              <View style={styles.binderStats}>
-                <Text style={styles.statText}>{binder.pages.length} pages</Text>
-                <Text style={styles.statText}>
-                  Updated {formatFirebaseTimestamp(binder.updatedAt)}
-                </Text>
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => openBinder(binder)}
+              >
+                <Layout style={styles.binderContent}>
+                  <Layout style={styles.binderHeader}>
+                    <Text category="h6" style={styles.binderName}>{binder.name}</Text>
+                    <Layout style={styles.binderStatus}>
+                      <Text category="c1" style={styles.statusText}>
+                        {binder.isPublic ? 'Public' : 'Private'}
+                      </Text>
+                    </Layout>
+                  </Layout>
+                  <Text category="s1" appearance="hint" style={styles.binderDescription}>{binder.description}</Text>
+                  <Layout style={styles.binderStats}>
+                    <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
+                    <Text category="c1" appearance="hint" style={styles.statText}>
+                      Updated {formatFirebaseTimestamp(binder.updatedAt)}
+                    </Text>
+                  </Layout>
+                </Layout>
+              </TouchableOpacity>
+            </Card>
           ))
         )}
       </ScrollView>
@@ -169,67 +174,73 @@ export default function MyBindersScreen({ navigation }: Props) {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-              <Text style={styles.cancelButton}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Create New Binder</Text>
-            <TouchableOpacity onPress={createBinder} disabled={creating}>
-              <Text style={[styles.createButtonText, creating && styles.disabledButton]}>
-                {creating ? 'Creating...' : 'Create'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <Layout style={styles.modalContainer}>
+          <Layout style={styles.modalHeader} level="2">
+            <Button
+              appearance="ghost"
+              status="basic"
+              size="small"
+              onPress={() => setShowCreateModal(false)}
+            >
+              Cancel
+            </Button>
+            <Text category="h6" style={styles.modalTitle}>Create New Binder</Text>
+            <Button
+              status="success"
+              size="small"
+              onPress={createBinder}
+              disabled={creating}
+              accessoryLeft={creating ? () => <Spinner size="small" status="control" /> : undefined}
+            >
+              {creating ? 'Creating...' : 'Create'}
+            </Button>
+          </Layout>
 
-          <View style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Binder Name</Text>
-            <TextInput
+          <Layout style={styles.modalContent}>
+            <Text category="s1" style={styles.inputLabel}>Binder Name</Text>
+            <Input
               style={styles.textInput}
               value={newBinderName}
               onChangeText={setNewBinderName}
               placeholder="e.g., My Commander Deck"
-              placeholderTextColor="#666"
+              disabled={creating}
             />
 
-            <Text style={styles.inputLabel}>Description (Optional)</Text>
-            <TextInput
+            <Text category="s1" style={styles.inputLabel}>Description (Optional)</Text>
+            <Input
               style={[styles.textInput, styles.textArea]}
               value={newBinderDescription}
               onChangeText={setNewBinderDescription}
               placeholder="Describe your binder..."
-              placeholderTextColor="#666"
-              multiline
-              numberOfLines={3}
+              multiline={true}
+              disabled={creating}
+              textStyle={styles.textAreaText}
             />
 
-            <View style={styles.infoBox}>
-              <Text style={styles.infoTitle}>📚 Digital Binder Features</Text>
-              <Text style={styles.infoText}>• 9-pocket pages like real binders</Text>
-              <Text style={styles.infoText}>• Upload cards via CSV import</Text>
-              <Text style={styles.infoText}>• Share with friends for trading</Text>
-              <Text style={styles.infoText}>• Real-time card pricing</Text>
-            </View>
-          </View>
-        </View>
+            <Card style={styles.infoBox}>
+              <Text category="h6" style={styles.infoTitle}>📚 Digital Binder Features</Text>
+              <Text category="s1" appearance="hint" style={styles.infoText}>• 9-pocket pages like real binders</Text>
+              <Text category="s1" appearance="hint" style={styles.infoText}>• Upload cards via CSV import</Text>
+              <Text category="s1" appearance="hint" style={styles.infoText}>• Share with friends for trading</Text>
+              <Text category="s1" appearance="hint" style={styles.infoText}>• Real-time card pricing</Text>
+            </Card>
+          </Layout>
+        </Layout>
       </Modal>
-    </View>
+    </Layout>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
   },
   loadingText: {
-    color: '#ccc',
     marginTop: 10,
   },
   header: {
@@ -238,22 +249,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     paddingTop: 10,
+    borderRadius: 8,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  createButton: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  createButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    marginBottom: 0,
   },
   bindersList: {
     flex: 1,
@@ -265,26 +264,23 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyIcon: {
-    fontSize: 48,
     marginBottom: 16,
+    textAlign: 'center',
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptyDescription: {
-    fontSize: 16,
-    color: '#888',
     textAlign: 'center',
     lineHeight: 24,
+    paddingHorizontal: 20,
   },
   binderCard: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
+  },
+  binderContent: {
+    padding: 16,
   },
   binderHeader: {
     flexDirection: 'row',
@@ -293,38 +289,30 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   binderName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
     flex: 1,
+    marginBottom: 0,
   },
   binderStatus: {
-    backgroundColor: '#4CAF50',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
   },
   statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    marginBottom: 0,
   },
   binderDescription: {
-    fontSize: 14,
-    color: '#ccc',
     marginBottom: 12,
+    marginTop: 8,
   },
   binderStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   statText: {
-    fontSize: 12,
-    color: '#888',
+    marginBottom: 0,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -332,59 +320,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  cancelButton: {
-    color: '#4CAF50',
-    fontSize: 16,
+    borderRadius: 0,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
+    marginBottom: 0,
   },
   modalContent: {
     flex: 1,
     padding: 20,
   },
   inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
     marginBottom: 8,
     marginTop: 16,
   },
   textInput: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#fff',
-    borderWidth: 1,
-    borderColor: '#333',
+    marginTop: 8,
   },
   textArea: {
-    height: 80,
-    textAlignVertical: 'top',
+    minHeight: 80,
+  },
+  textAreaText: {
+    minHeight: 80,
   },
   infoBox: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    padding: 16,
     marginTop: 24,
+    padding: 16,
   },
   infoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 12,
   },
   infoText: {
-    fontSize: 14,
-    color: '#ccc',
     marginBottom: 4,
-  },
-  disabledButton: {
-    opacity: 0.5,
   },
 });

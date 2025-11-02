@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, 
-  Text, 
   StyleSheet, 
-  TouchableOpacity, 
   Alert, 
-  TextInput, 
   KeyboardAvoidingView, 
   Platform,
-  ScrollView,
-  ActivityIndicator
+  ScrollView
 } from 'react-native';
+import { Layout, Text, Button, Input, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useAuthStore } from '../state/useAuthStore';
@@ -85,10 +81,10 @@ export default function LoginScreen({ navigation }: Props) {
 
   if (!initialized) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4CAF50" />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
+      <Layout style={styles.loadingContainer}>
+        <Spinner size="large" status="primary" />
+        <Text category="s1" appearance="hint" style={styles.loadingText}>Loading...</Text>
+      </Layout>
     );
   }
 
@@ -98,96 +94,103 @@ export default function LoginScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <Text style={styles.title}>MTG Binder</Text>
-          <Text style={styles.subtitle}>
+        <Layout style={styles.content}>
+          <Text category="h1" status="success" style={styles.title}>MTG Binder</Text>
+          <Text category="s1" appearance="hint" style={styles.subtitle} center>
             Share your Magic: The Gathering collection with friends and trade cards digitally
           </Text>
 
           {/* Email/Password Form */}
-          <View style={styles.formContainer}>
-            <Text style={styles.formTitle}>
+          <Card style={styles.formContainer}>
+            <Text category="h5" style={styles.formTitle} center>
               {isLogin ? 'Sign In' : 'Create Account'}
             </Text>
             
-            <TextInput
+            <Input
               style={styles.input}
               placeholder="Email"
-              placeholderTextColor="#666"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              disabled={loading}
             />
             
-            <TextInput
+            <Input
               style={styles.input}
               placeholder="Password"
-              placeholderTextColor="#666"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
               autoCapitalize="none"
+              disabled={loading}
             />
             
             {!isLogin && (
-              <TextInput
+              <Input
                 style={styles.input}
                 placeholder="Confirm Password"
-                placeholderTextColor="#666"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
                 autoCapitalize="none"
+                disabled={loading}
               />
             )}
             
-            <TouchableOpacity
-              style={[styles.button, styles.emailButton]}
+            <Button
+              style={styles.button}
+              status="success"
+              size="large"
               onPress={handleEmailAuth}
               disabled={loading}
+              accessoryLeft={loading ? () => <Spinner size="small" status="control" /> : undefined}
             >
-              <Text style={styles.buttonText}>
-                {loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account')}
-              </Text>
-            </TouchableOpacity>
+              {loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account')}
+            </Button>
             
-            <TouchableOpacity
+            <Button
+              appearance="ghost"
+              status="success"
+              size="small"
               style={styles.switchButton}
               onPress={() => setIsLogin(!isLogin)}
+              disabled={loading}
             >
-              <Text style={styles.switchButtonText}>
-                {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+              {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+            </Button>
+          </Card>
 
           {/* Social Sign-In */}
-          <View style={styles.socialContainer}>
-            <Text style={styles.socialTitle}>Or continue with</Text>
+          <Layout style={styles.socialContainer}>
+            <Text category="s1" appearance="hint" style={styles.socialTitle} center>Or continue with</Text>
             
-            <TouchableOpacity
-              style={[styles.button, styles.googleButton]}
+            <Button
+              style={styles.button}
+              status="danger"
+              size="large"
               onPress={handleGoogleSignIn}
               disabled={loading}
             >
-              <Text style={styles.socialButtonText}>🔍 Sign in with Google</Text>
-            </TouchableOpacity>
+              🔍 Sign in with Google
+            </Button>
             
-            <TouchableOpacity
-              style={[styles.button, styles.facebookButton]}
+            <Button
+              style={styles.button}
+              status="info"
+              size="large"
               onPress={handleFacebookSignIn}
               disabled={loading}
             >
-              <Text style={styles.socialButtonText}>📘 Sign in with Facebook</Text>
-            </TouchableOpacity>
-          </View>
+              📘 Sign in with Facebook
+            </Button>
+          </Layout>
 
-          <Text style={styles.description}>
+          <Text category="s1" appearance="hint" style={styles.description} center>
             Create digital binders, share with friends, and trade cards without the hassle of physical binders!
           </Text>
-        </View>
+        </Layout>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -196,18 +199,14 @@ export default function LoginScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
   },
   loadingText: {
-    color: '#ccc',
     marginTop: 10,
-    fontSize: 16,
   },
   scrollContent: {
     flexGrow: 1,
@@ -219,87 +218,37 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#4CAF50',
     marginBottom: 10,
-    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#ccc',
-    textAlign: 'center',
     marginBottom: 30,
     lineHeight: 24,
   },
   formContainer: {
     width: '100%',
     marginBottom: 30,
+    padding: 20,
   },
   formTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
     marginBottom: 20,
   },
   input: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    padding: 15,
-    fontSize: 16,
-    color: '#fff',
-    borderWidth: 1,
-    borderColor: '#333',
     marginBottom: 15,
   },
   button: {
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
     marginBottom: 15,
   },
-  emailButton: {
-    backgroundColor: '#4CAF50',
-  },
-  googleButton: {
-    backgroundColor: '#DB4437',
-  },
-  facebookButton: {
-    backgroundColor: '#4267B2',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  socialButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   switchButton: {
-    alignItems: 'center',
     marginTop: 10,
-  },
-  switchButtonText: {
-    color: '#4CAF50',
-    fontSize: 14,
   },
   socialContainer: {
     width: '100%',
     marginBottom: 30,
   },
   socialTitle: {
-    fontSize: 16,
-    color: '#ccc',
-    textAlign: 'center',
     marginBottom: 20,
   },
   description: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
     lineHeight: 20,
   },
 });

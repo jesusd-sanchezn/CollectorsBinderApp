@@ -3,6 +3,33 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import * as eva from '@eva-design/eva';
+import { ApplicationProvider } from '@ui-kitten/components';
+
+// Note: IconRegistry and EvaIconsPack are optional - we're using emoji icons in screens
+// If you need UI Kitten icons later, uncomment and import:
+// import { IconRegistry } from '@ui-kitten/components';
+// import { EvaIconsPack } from '@ui-kitten/eva-icons';
+
+// Custom theme with orange primary color
+const customTheme = {
+  ...eva.dark,
+  'color-primary-100': '#FFE6D1',
+  'color-primary-200': '#FFC79E',
+  'color-primary-300': '#FFA570',
+  'color-primary-400': '#FF8F3D',
+  'color-primary-500': '#FF8610',
+  'color-primary-600': '#CC6B0D',
+  'color-primary-700': '#99500A',
+  'color-primary-800': '#663608',
+  'color-primary-900': '#4D2906',
+  'color-primary-transparent-100': 'rgba(255, 134, 16, 0.08)',
+  'color-primary-transparent-200': 'rgba(255, 134, 16, 0.16)',
+  'color-primary-transparent-300': 'rgba(255, 134, 16, 0.24)',
+  'color-primary-transparent-400': 'rgba(255, 134, 16, 0.32)',
+  'color-primary-transparent-500': 'rgba(255, 134, 16, 0.40)',
+  'color-primary-transparent-600': 'rgba(255, 134, 16, 0.48)',
+};
 
 // Import screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -85,71 +112,75 @@ export default function App() {
 
   if (!initialized) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4CAF50" />
-      </View>
+      <ApplicationProvider mapping={eva.mapping} theme={customTheme}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF8610" />
+        </View>
+      </ApplicationProvider>
     );
   }
 
   return (
-    <NavigationContainer>
-      <StatusBar style="auto" />
-      <Stack.Navigator 
-        screenOptions={{ 
-          headerShown: true,
-          headerStyle: { backgroundColor: '#1a1a1a' },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: 'bold' }
-        }}
-      >
-        {user ? (
-          // User is signed in
-          <>
+    <ApplicationProvider mapping={eva.mapping} theme={customTheme}>
+      <NavigationContainer>
+        <StatusBar style="light" />
+        <Stack.Navigator 
+          screenOptions={{ 
+            headerShown: true,
+            headerStyle: { backgroundColor: '#222B45' },
+            headerTintColor: '#FFFFFF',
+            headerTitleStyle: { fontWeight: 'bold' }
+          }}
+        >
+          {user ? (
+            // User is signed in
+            <>
+              <Stack.Screen 
+                name="Home" 
+                component={HomeScreen} 
+                options={{ title: 'MTG Binder' }}
+              />
+              <Stack.Screen 
+                name="MyBinders" 
+                component={MyBindersScreen} 
+                options={{ title: 'My Binders' }}
+              />
+              <Stack.Screen 
+                name="BinderView" 
+                component={BinderViewScreen} 
+                options={({ route }) => ({ 
+                  title: `${route.params.ownerName}'s Binder` 
+                })}
+              />
+              <Stack.Screen 
+                name="Friends" 
+                component={FriendsScreen} 
+                options={{ title: 'Friends' }}
+              />
+              <Stack.Screen 
+                name="FriendBinders" 
+                component={FriendBindersScreen} 
+                options={({ route }) => ({ 
+                  title: `${route.params.friendName}'s Binders` 
+                })}
+              />
+              <Stack.Screen 
+                name="Trade" 
+                component={TradeScreen} 
+                options={{ title: 'Trade Session' }}
+              />
+            </>
+          ) : (
+            // User is not signed in
             <Stack.Screen 
-              name="Home" 
-              component={HomeScreen} 
-              options={{ title: 'MTG Binder' }}
+              name="Login" 
+              component={LoginScreen} 
+              options={{ headerShown: false }}
             />
-            <Stack.Screen 
-              name="MyBinders" 
-              component={MyBindersScreen} 
-              options={{ title: 'My Binders' }}
-            />
-            <Stack.Screen 
-              name="BinderView" 
-              component={BinderViewScreen} 
-              options={({ route }) => ({ 
-                title: `${route.params.ownerName}'s Binder` 
-              })}
-            />
-            <Stack.Screen 
-              name="Friends" 
-              component={FriendsScreen} 
-              options={{ title: 'Friends' }}
-            />
-            <Stack.Screen 
-              name="FriendBinders" 
-              component={FriendBindersScreen} 
-              options={({ route }) => ({ 
-                title: `${route.params.friendName}'s Binders` 
-              })}
-            />
-            <Stack.Screen 
-              name="Trade" 
-              component={TradeScreen} 
-              options={{ title: 'Trade Session' }}
-            />
-          </>
-        ) : (
-          // User is not signed in
-          <Stack.Screen 
-            name="Login" 
-            component={LoginScreen} 
-            options={{ headerShown: false }}
-          />
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </ApplicationProvider>
   );
 }
 
@@ -158,6 +189,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
   },
 });
