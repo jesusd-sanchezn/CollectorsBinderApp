@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
-  Alert, 
   KeyboardAvoidingView, 
   Platform,
   ScrollView
@@ -11,6 +10,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useAuthStore } from '../state/useAuthStore';
 import { COUNTRIES } from '../lib/countries';
+import AlertModal from '../components/AlertModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -20,6 +20,10 @@ export default function LoginScreen({ navigation }: Props) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [selectedCountryIndex, setSelectedCountryIndex] = useState<IndexPath | IndexPath[]>(new IndexPath(0));
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  
   const { 
     user, 
     loading, 
@@ -43,14 +47,20 @@ export default function LoginScreen({ navigation }: Props) {
     }
   }, [initialized, user, navigation]);
 
+  const showAlertModal = (title: string, message: string) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setShowAlert(true);
+  };
+
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showAlertModal('Error', 'Please fill in all fields');
       return;
     }
 
     if (!isLogin && password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showAlertModal('Error', 'Passwords do not match');
       return;
     }
 
@@ -64,7 +74,7 @@ export default function LoginScreen({ navigation }: Props) {
         await signUpWithEmail(email.trim(), password, country);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Authentication failed');
+      showAlertModal('Error', error.message || 'Authentication failed');
     }
   };
 
@@ -72,7 +82,7 @@ export default function LoginScreen({ navigation }: Props) {
     try {
       await signInWithGoogle();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Google sign-in failed');
+      showAlertModal('Error', error.message || 'Google sign-in failed');
     }
   };
 
@@ -80,7 +90,7 @@ export default function LoginScreen({ navigation }: Props) {
     try {
       await signInWithFacebook();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Facebook sign-in failed');
+      showAlertModal('Error', error.message || 'Facebook sign-in failed');
     }
   };
 
@@ -214,6 +224,14 @@ export default function LoginScreen({ navigation }: Props) {
           </Text>
         </Layout>
       </ScrollView>
+      
+      <AlertModal
+        visible={showAlert}
+        title={alertTitle}
+        message={alertMessage}
+        type="danger"
+        onClose={() => setShowAlert(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

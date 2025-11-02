@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   ScrollView, 
-  Alert, 
   Modal,
   TouchableOpacity
 } from 'react-native';
@@ -11,6 +10,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Binder } from '../types';
 import { BinderService } from '../lib/binderService';
 import { updateAllBindersToPublic } from '../lib/updateBindersToPublic';
+import AlertModal from '../components/AlertModal';
 
 // Helper function to format Firebase timestamps
 const formatFirebaseTimestamp = (timestamp: any): string => {
@@ -64,6 +64,17 @@ export default function MyBindersScreen({ navigation }: Props) {
   const [newBinderName, setNewBinderName] = useState('');
   const [newBinderDescription, setNewBinderDescription] = useState('');
   const [creating, setCreating] = useState(false);
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'danger'>('danger');
+
+  const showAlertModal = (title: string, message: string, type: 'success' | 'danger' = 'danger') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setShowAlert(true);
+  };
 
   const loadBinders = async () => {
     try {
@@ -88,7 +99,7 @@ export default function MyBindersScreen({ navigation }: Props) {
 
   const createBinder = async () => {
     if (!newBinderName.trim()) {
-      Alert.alert('Error', 'Please enter a binder name');
+      showAlertModal('Error', 'Please enter a binder name');
       return;
     }
 
@@ -100,7 +111,7 @@ export default function MyBindersScreen({ navigation }: Props) {
         true
       );
       
-      Alert.alert('Success', 'Binder created successfully!');
+      showAlertModal('Success', 'Binder created successfully!', 'success');
       setNewBinderName('');
       setNewBinderDescription('');
       setShowCreateModal(false);
@@ -108,7 +119,7 @@ export default function MyBindersScreen({ navigation }: Props) {
     } catch (error) {
       console.error('Error creating binder:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      Alert.alert('Error', `Failed to create binder: ${errorMessage}`);
+      showAlertModal('Error', `Failed to create binder: ${errorMessage}`);
     } finally {
       setCreating(false);
     }
@@ -253,6 +264,14 @@ export default function MyBindersScreen({ navigation }: Props) {
           </Layout>
         </Layout>
       </Modal>
+      
+      <AlertModal
+        visible={showAlert}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setShowAlert(false)}
+      />
     </Layout>
   );
 }

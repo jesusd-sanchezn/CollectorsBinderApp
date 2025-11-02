@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, Alert } from 'react-native';
+import { StyleSheet, ScrollView } from 'react-native';
 import { Layout, Text, Button, Input, Card, Spinner, Select, SelectItem, IndexPath } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useAuthStore } from '../state/useAuthStore';
 import { COUNTRIES } from '../lib/countries';
+import AlertModal from '../components/AlertModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -16,8 +17,25 @@ export default function ProfileScreen({ navigation }: Props) {
   const [country, setCountry] = useState('');
   const [selectedCountryIndex, setSelectedCountryIndex] = useState<IndexPath | IndexPath[]>(new IndexPath(0));
   const [email, setEmail] = useState('');
+  
+  // Alert modal state
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'danger'>('success');
 
   const { getUserProfile, updateProfile } = useAuthStore();
+  
+  const showAlertModal = (title: string, message: string, type: 'success' | 'danger' = 'success') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setShowAlert(true);
+  };
+  
+  const hideAlertModal = () => {
+    setShowAlert(false);
+  };
 
   useEffect(() => {
     loadProfile();
@@ -41,7 +59,7 @@ export default function ProfileScreen({ navigation }: Props) {
       }
     } catch (error) {
       console.error('Error loading profile:', error);
-      Alert.alert('Error', 'Failed to load profile');
+      showAlertModal('Error', 'Failed to load profile', 'danger');
     } finally {
       setLoading(false);
     }
@@ -49,7 +67,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const handleSave = async () => {
     if (!displayName.trim()) {
-      Alert.alert('Error', 'Please enter a display name');
+      showAlertModal('Error', 'Please enter a display name', 'danger');
       return;
     }
 
@@ -64,11 +82,14 @@ export default function ProfileScreen({ navigation }: Props) {
         country: selectedCountry
       });
       
-      Alert.alert('Success', 'Profile updated successfully!');
-      navigation.goBack();
+      showAlertModal('Success', 'Profile updated successfully!', 'success');
+      setTimeout(() => {
+        hideAlertModal();
+        navigation.goBack();
+      }, 1500);
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', error.message || 'Failed to update profile');
+      showAlertModal('Error', error.message || 'Failed to update profile', 'danger');
     } finally {
       setSaving(false);
     }
@@ -140,6 +161,14 @@ export default function ProfileScreen({ navigation }: Props) {
           </Button>
         </Card>
       </ScrollView>
+      
+      <AlertModal
+        visible={showAlert}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={hideAlertModal}
+      />
     </Layout>
   );
 }

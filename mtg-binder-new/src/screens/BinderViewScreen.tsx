@@ -3,11 +3,11 @@ import {
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  Alert, 
   Modal,
   Dimensions,
   Image,
-  View
+  View,
+  Alert
 } from 'react-native';
 import { Layout, Text, Button, Input, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -17,6 +17,8 @@ import { CSVParser } from '../lib/csvParser';
 import { useAuthStore } from '../state/useAuthStore';
 import { TradeService } from '../lib/tradeService';
 import { NotificationService } from '../lib/notificationService';
+import AlertModal from '../components/AlertModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BinderView'>;
 
@@ -42,8 +44,23 @@ export default function BinderViewScreen({ route }: Props) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [creatingTrade, setCreatingTrade] = useState(false);
   
+  // Alert and Confirm modal state
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'danger' | 'warning'>('danger');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showRearrangeConfirm, setShowRearrangeConfirm] = useState(false);
+  
   // Determine if current user is the owner
   const isOwner = user?.uid === ownerId;
+  
+  const showAlertModal = (title: string, message: string, type: 'success' | 'danger' | 'warning' = 'danger') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setShowAlert(true);
+  };
 
   useEffect(() => {
     loadBinder();
@@ -354,14 +371,14 @@ export default function BinderViewScreen({ route }: Props) {
       
       setShowCardModal(false);
       
-      Alert.alert(
+      showAlertModal(
         'Card Added',
         `"${selectedCard.name}" has been added to your trade selection. Use "Review" to confirm.`,
-        [{ text: 'OK' }]
+        'success'
       );
     } catch (error) {
       console.error('Error adding card to selection:', error);
-      Alert.alert('Error', 'Failed to add card to selection');
+      showAlertModal('Error', 'Failed to add card to selection');
     }
   };
 
@@ -788,9 +805,8 @@ export default function BinderViewScreen({ route }: Props) {
                 size="small"
                 style={styles.cardModalCloseButton}
                 onPress={() => setShowCardModal(false)}
-              >
-                ✕
-              </Button>
+                accessoryLeft={() => <Text style={styles.cardModalCloseText}>✕</Text>}
+              />
               
               {selectedCard && (
                 <Layout style={styles.cardDetailContainer}>
@@ -830,16 +846,14 @@ export default function BinderViewScreen({ route }: Props) {
                       <Button 
                         status="danger"
                         size="medium"
-                        style={styles.deleteButton}
                         onPress={handleDeleteCard}
                       >
                         🗑️ Delete Card
                       </Button>
                     ) : (
                       <Button 
-                        status="info"
+                        status="primary"
                         size="medium"
-                        style={styles.tradeButton}
                         onPress={handleMarkForTrade}
                       >
                         🔄 Mark for Trade
@@ -852,6 +866,14 @@ export default function BinderViewScreen({ route }: Props) {
           </TouchableOpacity>
         </Layout>
       </Modal>
+      
+      <AlertModal
+        visible={showAlert}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setShowAlert(false)}
+      />
     </Layout>
   );
 }
@@ -1164,7 +1186,6 @@ const styles = StyleSheet.create({
   cardModalContent: {
     width: '90%',
     maxHeight: '80%',
-    backgroundColor: '#2a2a2a',
     borderRadius: 12,
     padding: 20,
     position: 'relative',
@@ -1173,16 +1194,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#444',
-    justifyContent: 'center',
-    alignItems: 'center',
     zIndex: 1,
   },
   cardModalCloseText: {
-    color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -1201,13 +1215,11 @@ const styles = StyleSheet.create({
   cardDetailName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
     textAlign: 'center',
     marginBottom: 8,
   },
   cardDetailSet: {
     fontSize: 14,
-    color: '#ccc',
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -1223,12 +1235,10 @@ const styles = StyleSheet.create({
   },
   cardDetailStatLabel: {
     fontSize: 14,
-    color: '#888',
     fontWeight: '600',
   },
   cardDetailStatValue: {
     fontSize: 14,
-    color: '#fff',
     fontWeight: '500',
   },
   cardDetailPrice: {
@@ -1259,32 +1269,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
-  },
-  deleteButton: {
-    backgroundColor: '#ff4444',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  tradeButton: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  tradeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   // Selection Mode Styles
   cardSlotSelectionMode: {
