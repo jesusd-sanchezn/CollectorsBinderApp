@@ -36,6 +36,25 @@ const formatFirebaseTimestamp = (timestamp: any): string => {
   }
 };
 
+// Helper function to calculate binder statistics
+const calculateBinderStats = (binder: Binder): { cardCount: number; totalValue: number } => {
+  let cardCount = 0;
+  let totalValue = 0;
+
+  binder.pages.forEach((page) => {
+    page.slots.forEach((slot) => {
+      if (!slot.isEmpty && slot.card) {
+        cardCount += slot.card.quantity || 1;
+        if (slot.card.price) {
+          totalValue += slot.card.price * (slot.card.quantity || 1);
+        }
+      }
+    });
+  });
+
+  return { cardCount, totalValue };
+};
+
 type Props = NativeStackScreenProps<RootStackParamList, 'MyBinders'>;
 
 export default function MyBindersScreen({ navigation }: Props) {
@@ -136,35 +155,42 @@ export default function MyBindersScreen({ navigation }: Props) {
             </Text>
           </Layout>
         ) : (
-          binders.map((binder) => (
-            <Card
-              key={binder.id}
-              style={styles.binderCard}
-            >
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => openBinder(binder)}
+          binders.map((binder) => {
+            const { cardCount, totalValue } = calculateBinderStats(binder);
+            return (
+              <Card
+                key={binder.id}
+                style={styles.binderCard}
               >
-                <Layout style={styles.binderContent}>
-                  <Layout style={styles.binderHeader}>
-                    <Text category="h6" style={styles.binderName}>{binder.name}</Text>
-                    <Layout style={styles.binderStatus}>
-                      <Text category="c1" style={styles.statusText}>
-                        {binder.isPublic ? 'Public' : 'Private'}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => openBinder(binder)}
+                >
+                  <Layout style={styles.binderContent}>
+                    <Layout style={styles.binderHeader}>
+                      <Text category="h6" style={styles.binderName}>{binder.name}</Text>
+                      <Layout style={styles.binderStatus}>
+                        <Text category="c1" style={styles.statusText}>
+                          {binder.isPublic ? 'Public' : 'Private'}
+                        </Text>
+                      </Layout>
+                    </Layout>
+                    <Text category="s1" appearance="hint" style={styles.binderDescription}>{binder.description}</Text>
+                    <Layout style={styles.binderStats}>
+                      <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
+                      <Text category="c1" appearance="hint" style={styles.statText}>{cardCount} cards</Text>
+                      <Text category="c1" appearance="hint" style={styles.statText}>
+                        ${totalValue.toFixed(2)}
+                      </Text>
+                      <Text category="c1" appearance="hint" style={styles.statText}>
+                        Updated {formatFirebaseTimestamp(binder.updatedAt)}
                       </Text>
                     </Layout>
                   </Layout>
-                  <Text category="s1" appearance="hint" style={styles.binderDescription}>{binder.description}</Text>
-                  <Layout style={styles.binderStats}>
-                    <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
-                    <Text category="c1" appearance="hint" style={styles.statText}>
-                      Updated {formatFirebaseTimestamp(binder.updatedAt)}
-                    </Text>
-                  </Layout>
-                </Layout>
-              </TouchableOpacity>
-            </Card>
-          ))
+                </TouchableOpacity>
+              </Card>
+            );
+          })
         )}
       </ScrollView>
 
@@ -306,7 +332,9 @@ const styles = StyleSheet.create({
   },
   binderStats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 12,
   },
   statText: {
     marginBottom: 0,

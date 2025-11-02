@@ -271,6 +271,7 @@ export default function BinderViewScreen({ route }: Props) {
       const tradeId = await TradeService.createTrade(
         ownerId,
         ownerName,
+        user.displayName || user.email?.split('@')[0] || 'Someone',
         wants,
         [] // No offers for now
       );

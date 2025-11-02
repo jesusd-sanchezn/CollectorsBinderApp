@@ -4,7 +4,6 @@ import { Layout, Text, Button, Card } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useAuthStore } from '../state/useAuthStore';
-import { testSimpleNotification } from '../lib/testNotifications';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -30,16 +29,6 @@ export default function HomeScreen({ navigation }: Props) {
         }
       ]
     );
-  };
-
-  const handleTestNotification = async () => {
-    try {
-      await testSimpleNotification();
-      Alert.alert('Success', 'Test notification sent! Check your notification tray.');
-    } catch (error) {
-      console.error('Test notification error:', error);
-      Alert.alert('Error', 'Failed to send test notification. Check console for details.');
-    }
   };
 
   return (
@@ -91,19 +80,9 @@ export default function HomeScreen({ navigation }: Props) {
               status="primary"
               size="large"
               style={styles.menuItemButton}
-              onPress={() => Alert.alert('Coming Soon', 'Trade feature coming soon!')}
+              onPress={() => navigation.navigate('Trade')}
             >
               🔄 Trades
-            </Button>
-            
-            <Button
-              appearance="filled"
-              status="primary"
-              size="large"
-              style={styles.menuItemButton}
-              onPress={handleTestNotification}
-            >
-              🔔 Test Notifications
             </Button>
           </View>
           

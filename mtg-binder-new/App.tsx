@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import * as eva from '@eva-design/eva';
 import { ApplicationProvider } from '@ui-kitten/components';
+import { navigationRef } from './src/lib/navigationRef';
 
 // Note: IconRegistry and EvaIconsPack are optional - we're using emoji icons in screens
 // If you need UI Kitten icons later, uncomment and import:
@@ -54,7 +55,7 @@ export type RootStackParamList = {
   BinderView: { binderId: string; ownerId: string; ownerName: string };
   Friends: undefined;
   FriendBinders: { friendId: string; friendName: string };
-  Trade: { tradeId: string };
+  Trade: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -96,7 +97,12 @@ export default function App() {
         const data = response.notification.request.content.data;
         
         // Handle navigation based on notification type
-        // This will be expanded when we have proper navigation context
+        if (data?.type === 'tradeRequest') {
+          // Navigate to Trades screen
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('Trade');
+          }
+        }
       }
     );
 
@@ -122,7 +128,7 @@ export default function App() {
 
   return (
     <ApplicationProvider mapping={eva.mapping} theme={customTheme}>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <StatusBar style="light" />
         <Stack.Navigator 
           screenOptions={{ 
@@ -167,7 +173,7 @@ export default function App() {
               <Stack.Screen 
                 name="Trade" 
                 component={TradeScreen} 
-                options={{ title: 'Trade Session' }}
+                options={{ title: 'Trades' }}
               />
             </>
           ) : (

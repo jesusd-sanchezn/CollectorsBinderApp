@@ -63,6 +63,8 @@ export interface Trade {
   id: string;
   initiatorId: string;
   recipientId: string;
+  initiatorName?: string;
+  recipientName?: string;
   status: 'pending' | 'accepted' | 'declined' | 'completed';
   wants: TradeItem[];
   offers: TradeItem[];
@@ -86,5 +88,5 @@ export type RootStackParamList = {
   BinderView: { binderId: string; ownerId: string; ownerName: string };
   Friends: undefined;
   FriendBinders: { friendId: string; friendName: string };
-  Trade: { tradeId: string };
+  Trade: undefined;
 };

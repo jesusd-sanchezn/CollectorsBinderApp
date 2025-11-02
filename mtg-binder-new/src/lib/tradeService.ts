@@ -29,6 +29,7 @@ export class TradeService {
   static async createTrade(
     recipientId: string,
     recipientName: string,
+    initiatorName: string,
     wants: TradeItem[],
     offers: TradeItem[] = []
   ): Promise<string> {
@@ -42,6 +43,7 @@ export class TradeService {
       const tradeData = {
         initiatorId: currentUserId,
         recipientId,
+        initiatorName,
         recipientName,
         status: 'pending' as const,
         wants,
