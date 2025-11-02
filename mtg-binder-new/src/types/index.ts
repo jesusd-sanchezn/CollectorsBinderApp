@@ -15,6 +15,7 @@ export interface Binder {
   name: string;
   description?: string;
   isPublic: boolean;
+  backgroundImageUrl?: string;
   pages: BinderPage[];
   createdAt: Date;
   updatedAt: Date;

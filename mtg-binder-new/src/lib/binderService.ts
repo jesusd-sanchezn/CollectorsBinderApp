@@ -308,6 +308,27 @@ export class BinderService {
     }
   }
 
+  // Update binder background image
+  static async updateBinderBackground(binderId: string, backgroundImageUrl: string): Promise<void> {
+    try {
+      const binder = await this.getBinder(binderId);
+      if (!binder) throw new Error('Binder not found');
+      
+      const userId = this.getCurrentUserId();
+      if (binder.ownerId !== userId) {
+        throw new Error('Only the owner can update the binder');
+      }
+
+      await updateDoc(doc(db, 'binders', binderId), {
+        backgroundImageUrl: backgroundImageUrl || '',
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating binder background:', error);
+      throw error;
+    }
+  }
+
   // Helper method to create an empty page with 3x3 grid (9 slots)
   private static createEmptyPage(pageNumber: number): BinderPage {
     const slots: BinderSlot[] = [];

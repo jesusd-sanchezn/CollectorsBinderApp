@@ -3,7 +3,8 @@ import {
   StyleSheet, 
   ScrollView, 
   Alert, 
-  TouchableOpacity
+  TouchableOpacity,
+  Image
 } from 'react-native';
 import { Layout, Text, Button, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -81,6 +82,13 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
               key={binder.id}
               style={styles.binderCard}
             >
+              {binder.backgroundImageUrl && (
+                <Image 
+                  source={{ uri: binder.backgroundImageUrl }} 
+                  style={styles.binderBackground}
+                  resizeMode="cover"
+                />
+              )}
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => openBinder(binder)}
@@ -163,9 +171,21 @@ const styles = StyleSheet.create({
   },
   binderCard: {
     marginBottom: 12,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  binderBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.3,
   },
   binderContent: {
     padding: 16,
+    position: 'relative',
+    zIndex: 1,
   },
   binderHeader: {
     flexDirection: 'row',

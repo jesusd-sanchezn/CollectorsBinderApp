@@ -3,7 +3,8 @@ import {
   StyleSheet, 
   ScrollView, 
   Modal,
-  TouchableOpacity
+  TouchableOpacity,
+  Image
 } from 'react-native';
 import { Layout, Text, Button, Input, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -68,12 +69,41 @@ export default function MyBindersScreen({ navigation }: Props) {
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'danger'>('danger');
+  
+  // Image editor modal state
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [editingBinderId, setEditingBinderId] = useState<string | null>(null);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState('');
+  const [updatingImage, setUpdatingImage] = useState(false);
 
   const showAlertModal = (title: string, message: string, type: 'success' | 'danger' = 'danger') => {
     setAlertTitle(title);
     setAlertMessage(message);
     setAlertType(type);
     setShowAlert(true);
+  };
+  
+  const handleEditBackground = (binder: Binder) => {
+    setEditingBinderId(binder.id);
+    setBackgroundImageUrl(binder.backgroundImageUrl || '');
+    setShowImageModal(true);
+  };
+  
+  const handleSaveBackground = async () => {
+    if (!editingBinderId) return;
+    
+    try {
+      setUpdatingImage(true);
+      await BinderService.updateBinderBackground(editingBinderId, backgroundImageUrl.trim());
+      showAlertModal('Success', 'Background image updated successfully!', 'success');
+      setShowImageModal(false);
+      await loadBinders();
+    } catch (error) {
+      console.error('Error updating background:', error);
+      showAlertModal('Error', 'Failed to update background image');
+    } finally {
+      setUpdatingImage(false);
+    }
   };
 
   const loadBinders = async () => {
@@ -173,6 +203,13 @@ export default function MyBindersScreen({ navigation }: Props) {
                 key={binder.id}
                 style={styles.binderCard}
               >
+                {binder.backgroundImageUrl && (
+                  <Image 
+                    source={{ uri: binder.backgroundImageUrl }} 
+                    style={styles.binderBackground}
+                    resizeMode="cover"
+                  />
+                )}
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={() => openBinder(binder)}
@@ -198,6 +235,13 @@ export default function MyBindersScreen({ navigation }: Props) {
                       </Text>
                     </Layout>
                   </Layout>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.editIcon}
+                  onPress={() => handleEditBackground(binder)}
+                  activeOpacity={0.7}
+                >
+                  <Text category="h4">✏️</Text>
                 </TouchableOpacity>
               </Card>
             );
@@ -265,6 +309,64 @@ export default function MyBindersScreen({ navigation }: Props) {
         </Layout>
       </Modal>
       
+      {/* Edit Background Image Modal */}
+      <Modal
+        visible={showImageModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <Layout style={styles.modalContainer}>
+          <Layout style={styles.modalHeader} level="2">
+            <Button
+              appearance="ghost"
+              status="basic"
+              size="small"
+              onPress={() => setShowImageModal(false)}
+            >
+              Cancel
+            </Button>
+            <Text category="h6" style={styles.modalTitle}>Edit Background</Text>
+            <Button
+              status="success"
+              size="small"
+              onPress={handleSaveBackground}
+              disabled={updatingImage}
+              accessoryLeft={updatingImage ? () => <Spinner size="small" status="control" /> : undefined}
+            >
+              {updatingImage ? 'Saving...' : 'Save'}
+            </Button>
+          </Layout>
+
+          <Layout style={styles.modalContent}>
+            <Text category="s1" style={styles.inputLabel}>Background Image URL</Text>
+            <Input
+              style={styles.textInput}
+              value={backgroundImageUrl}
+              onChangeText={setBackgroundImageUrl}
+              placeholder="https://example.com/image.jpg"
+              disabled={updatingImage}
+            />
+            
+            {backgroundImageUrl.trim() && (
+              <Layout style={styles.imagePreview}>
+                <Image
+                  source={{ uri: backgroundImageUrl.trim() }}
+                  style={styles.previewImage}
+                  resizeMode="cover"
+                />
+              </Layout>
+            )}
+            
+            <Card style={styles.infoBox}>
+              <Text category="h6" style={styles.infoTitle}>🎨 Playmat Background</Text>
+              <Text category="s1" appearance="hint" style={styles.infoText}>
+                Add a playmat image to visually identify your binder. Search for Magic: The Gathering playmats online.
+              </Text>
+            </Card>
+          </Layout>
+        </Layout>
+      </Modal>
+      
       <AlertModal
         visible={showAlert}
         title={alertTitle}
@@ -323,9 +425,29 @@ const styles = StyleSheet.create({
   },
   binderCard: {
     marginBottom: 12,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  binderBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.3,
   },
   binderContent: {
     padding: 16,
+    position: 'relative',
+    zIndex: 1,
+  },
+  editIcon: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 2,
+    padding: 8,
+    borderRadius: 20,
   },
   binderHeader: {
     flexDirection: 'row',
@@ -398,5 +520,15 @@ const styles = StyleSheet.create({
   },
   infoText: {
     marginBottom: 4,
+  },
+  imagePreview: {
+    marginTop: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    height: 200,
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
   },
 });
