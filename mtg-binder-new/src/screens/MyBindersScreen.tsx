@@ -274,7 +274,7 @@ export default function MyBindersScreen({ navigation }: Props) {
       <ScrollView style={styles.bindersList}>
         {binders.length === 0 ? (
           <Layout style={styles.emptyState}>
-            <Text category="h1" style={styles.emptyIcon}>📚</Text>
+            <Feather name="book" size={64} color="#FF8610" />
             <Text category="h5" style={styles.emptyTitle}>No binders yet</Text>
             <Text category="s1" appearance="hint" style={styles.emptyDescription} center>
               Create your first binder to start organizing your MTG collection
@@ -360,7 +360,7 @@ export default function MyBindersScreen({ navigation }: Props) {
                     onPress={() => handleEditBackground(binder)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.editIconText}>✏️</Text>
+                    <Feather name="edit-2" size={18} color="#FF8610" />
                   </TouchableOpacity>
                 </View>
               </Card>
@@ -445,7 +445,7 @@ export default function MyBindersScreen({ navigation }: Props) {
             </View>
 
             <Card style={styles.infoBox}>
-              <Text category="h6" style={styles.infoTitle}>📚 Digital Binder Features</Text>
+              <Text category="h6" style={styles.infoTitle}>Digital Binder Features</Text>
               <Text category="s1" appearance="hint" style={styles.infoText}>• 9-pocket pages like real binders</Text>
               <Text category="s1" appearance="hint" style={styles.infoText}>• Upload cards via CSV import</Text>
               <Text category="s1" appearance="hint" style={styles.infoText}>• Share with friends for trading</Text>

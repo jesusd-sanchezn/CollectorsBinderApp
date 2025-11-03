@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, ScrollView, Alert, TouchableOpacity, Image } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Trade } from '../types';
 import { TradeService } from '../lib/tradeService';
 import { useAuthStore } from '../state/useAuthStore';
+import AlertModal from '../components/AlertModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Trade'>;
 
@@ -33,6 +35,17 @@ export default function TradeScreen({ navigation }: Props) {
   const { user } = useAuthStore();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'danger'>('danger');
+
+  const showAlertModal = (title: string, message: string, type: 'success' | 'danger' = 'danger') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setShowAlert(true);
+  };
 
   const loadTrades = async () => {
     try {
@@ -54,22 +67,22 @@ export default function TradeScreen({ navigation }: Props) {
   const handleAcceptTrade = async (tradeId: string) => {
     try {
       await TradeService.acceptTrade(tradeId);
-      Alert.alert('Success', 'Trade accepted!');
+      showAlertModal('Success', 'Trade accepted!', 'success');
       await loadTrades();
     } catch (error) {
       console.error('Error accepting trade:', error);
-      Alert.alert('Error', 'Failed to accept trade');
+      showAlertModal('Error', 'Failed to accept trade');
     }
   };
 
   const handleDeclineTrade = async (tradeId: string) => {
     try {
       await TradeService.declineTrade(tradeId);
-      Alert.alert('Success', 'Trade declined');
+      showAlertModal('Success', 'Trade declined', 'success');
       await loadTrades();
     } catch (error) {
       console.error('Error declining trade:', error);
-      Alert.alert('Error', 'Failed to decline trade');
+      showAlertModal('Error', 'Failed to decline trade');
     }
   };
 
@@ -93,7 +106,7 @@ export default function TradeScreen({ navigation }: Props) {
       <ScrollView style={styles.tradesList}>
         {trades.length === 0 ? (
           <Layout style={styles.emptyState}>
-            <Text category="h1" style={styles.emptyIcon}>🔄</Text>
+            <Feather name="refresh-cw" size={64} color="#FF8610" />
             <Text category="h5" style={styles.emptyTitle}>No trades yet</Text>
             <Text category="s1" appearance="hint" style={styles.emptyDescription} center>
               Start browsing your friends' binders to request cards
@@ -169,16 +182,18 @@ export default function TradeScreen({ navigation }: Props) {
                         size="small"
                         style={styles.actionButton}
                         onPress={() => handleAcceptTrade(trade.id)}
+                        accessoryLeft={() => <Feather name="check" size={16} color="#FFFFFF" />}
                       >
-                        ✓ Accept
+                        Accept
                       </Button>
                       <Button
                         status="danger"
                         size="small"
                         style={styles.actionButton}
                         onPress={() => handleDeclineTrade(trade.id)}
+                        accessoryLeft={() => <Feather name="x" size={16} color="#FFFFFF" />}
                       >
-                        ✕ Decline
+                        Decline
                       </Button>
                     </Layout>
                   )}
@@ -188,6 +203,14 @@ export default function TradeScreen({ navigation }: Props) {
           })
         )}
       </ScrollView>
+
+      <AlertModal
+        visible={showAlert}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setShowAlert(false)}
+      />
     </Layout>
   );
 }

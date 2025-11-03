@@ -5,6 +5,7 @@ import {
   Platform,
   ScrollView
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Input, Card, Spinner, Select, SelectItem, IndexPath } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
@@ -204,8 +205,9 @@ export default function LoginScreen({ navigation }: Props) {
               size="large"
               onPress={handleGoogleSignIn}
               disabled={loading}
+              accessoryLeft={() => <Feather name="search" size={20} color="#FFFFFF" />}
             >
-              🔍 Sign in with Google
+              Sign in with Google
             </Button>
             
             <Button

@@ -9,6 +9,7 @@ import {
   View,
   Alert
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Input, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Binder, BinderPage, BinderSlot, Card, TradeItem } from '../types';
@@ -457,7 +458,7 @@ export default function BinderViewScreen({ route }: Props) {
         {/* Selection Checkbox Overlay */}
         {showSelectionUI && (
           <View style={[styles.selectionCheckbox, isSelected && styles.selectionCheckboxSelected]}>
-            {isSelected && <Text style={styles.selectionCheckmark}>✓</Text>}
+            {isSelected && <Feather name="check" size={16} color="#FFFFFF" />}
           </View>
         )}
         {/* Card Name at Top */}
@@ -561,24 +562,27 @@ export default function BinderViewScreen({ route }: Props) {
               size="small"
               style={styles.actionButton}
               onPress={() => setShowImportModal(true)}
+              accessoryLeft={() => <Feather name="download" size={16} color="#FFFFFF" />}
             >
-              📥 Import
+              Import
             </Button>
             <Button 
               status="primary"
               size="small"
               style={styles.actionButton}
               onPress={addPage}
+              accessoryLeft={() => <Feather name="file-plus" size={16} color="#FFFFFF" />}
             >
-              📄 Add Page
+              Add Page
             </Button>
             <Button 
               status="primary"
               size="small"
               style={styles.actionButton}
               onPress={handleRearrangeCards}
+              accessoryLeft={() => <Feather name="refresh-cw" size={16} color="#FFFFFF" />}
             >
-              🔄 Rearrange
+              Rearrange
             </Button>
           </Layout>
         )}
@@ -589,8 +593,9 @@ export default function BinderViewScreen({ route }: Props) {
               size="small"
               style={styles.actionButton}
               onPress={toggleSelectionMode}
+              accessoryLeft={() => <Feather name={selectionMode ? "x" : "check-square"} size={16} color="#FFFFFF" />}
             >
-              {selectionMode ? '✕ Cancel' : '✓ Select Cards'}
+              {selectionMode ? 'Cancel' : 'Select Cards'}
             </Button>
             {selectionMode && selectedCardsForTrade.size > 0 && (
               <Button 
@@ -598,8 +603,9 @@ export default function BinderViewScreen({ route }: Props) {
                 size="small"
                 style={styles.actionButton}
                 onPress={() => setShowConfirmModal(true)}
+                accessoryLeft={() => <Feather name="clipboard" size={16} color="#FFFFFF" />}
               >
-                📋 Review ({selectedCardsForTrade.size})
+                Review ({selectedCardsForTrade.size})
               </Button>
             )}
           </Layout>
@@ -678,7 +684,7 @@ export default function BinderViewScreen({ route }: Props) {
           )}
 
           <Layout style={styles.modalContent}>
-            <Text category="h6" style={styles.instructionsTitle}>📋 CSV Import Instructions</Text>
+            <Text category="h6" style={styles.instructionsTitle}>CSV Import Instructions</Text>
             <Text category="s1" appearance="hint" style={styles.instructionsText}>
               Paste your DelverLens CSV export here. The format should include:
             </Text>
@@ -776,9 +782,9 @@ export default function BinderViewScreen({ route }: Props) {
                 style={styles.confirmButton}
                 onPress={handleConfirmTrade}
                 disabled={creatingTrade}
-                accessoryLeft={creatingTrade ? () => <Spinner size="small" status="control" /> : undefined}
+                accessoryLeft={creatingTrade ? () => <Spinner size="small" status="control" /> : () => <Feather name="check" size={16} color="#FFFFFF" />}
               >
-                {creatingTrade ? 'Creating Trade...' : '✓ Confirm Trade Request'}
+                {creatingTrade ? 'Creating Trade...' : 'Confirm Trade Request'}
               </Button>
             </Layout>
           </ScrollView>
@@ -847,16 +853,18 @@ export default function BinderViewScreen({ route }: Props) {
                         status="danger"
                         size="medium"
                         onPress={handleDeleteCard}
+                        accessoryLeft={() => <Feather name="trash-2" size={16} color="#FFFFFF" />}
                       >
-                        🗑️ Delete Card
+                        Delete Card
                       </Button>
                     ) : (
                       <Button 
                         status="primary"
                         size="medium"
                         onPress={handleMarkForTrade}
+                        accessoryLeft={() => <Feather name="refresh-cw" size={16} color="#FFFFFF" />}
                       >
-                        🔄 Mark for Trade
+                        Mark for Trade
                       </Button>
                     )}
                   </Layout>

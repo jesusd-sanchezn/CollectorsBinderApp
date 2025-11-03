@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Card } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
@@ -46,14 +47,25 @@ export default function HomeScreen({ navigation }: Props) {
               <Text category="h2" style={styles.welcome}>Welcome to MTG Binder!</Text>
               <Text category="s1" status="primary" style={styles.userEmail}>{user?.email}</Text>
             </Layout>
-            <Button 
-              status="danger" 
-              size="small"
-              onPress={handleSignOut}
-              style={styles.signOutButton}
-            >
-              Sign Out
-            </Button>
+            <Layout style={styles.headerButtons}>
+              <Button 
+                status="info" 
+                size="small"
+                onPress={() => navigation.navigate('Profile')}
+                style={styles.profileButton}
+                accessoryLeft={() => <Feather name="user" size={18} color="#FFFFFF" />}
+              >
+                Profile
+              </Button>
+              <Button 
+                status="danger" 
+                size="small"
+                onPress={handleSignOut}
+                style={styles.signOutButton}
+              >
+                Sign Out
+              </Button>
+            </Layout>
           </Layout>
           
           <Text category="s1" appearance="hint" style={styles.description} center>
@@ -67,8 +79,9 @@ export default function HomeScreen({ navigation }: Props) {
               size="large"
               style={styles.menuItemButton}
               onPress={() => navigation.navigate('MyBinders')}
+              accessoryLeft={() => <Feather name="book" size={20} color="#FFFFFF" />}
             >
-              📚 My Binders
+              My Binders
             </Button>
             
             <Button
@@ -77,8 +90,9 @@ export default function HomeScreen({ navigation }: Props) {
               size="large"
               style={styles.menuItemButton}
               onPress={() => navigation.navigate('Friends')}
+              accessoryLeft={() => <Feather name="users" size={20} color="#FFFFFF" />}
             >
-              👥 Friends
+              Friends
             </Button>
             
             <Button
@@ -87,39 +101,30 @@ export default function HomeScreen({ navigation }: Props) {
               size="large"
               style={styles.menuItemButton}
               onPress={() => navigation.navigate('Trade')}
+              accessoryLeft={() => <Feather name="refresh-cw" size={20} color="#FFFFFF" />}
             >
-              🔄 Trades
-            </Button>
-            
-            <Button
-              appearance="filled"
-              status="info"
-              size="large"
-              style={styles.menuItemButton}
-              onPress={() => navigation.navigate('Profile')}
-            >
-              👤 Profile
+              Trades
             </Button>
           </View>
           
           <Card style={styles.featuresContainer}>
             <Text category="h5" style={styles.featuresTitle} center>Features</Text>
             <Layout style={styles.featureItem}>
-              <Text category="h4" style={styles.featureIcon}>📱</Text>
+              <Feather name="smartphone" size={32} color="#FF8610" />
               <Text category="s1" style={styles.featureText}>
                 Digital binders with 9-pocket pages
               </Text>
             </Layout>
             <Layout style={styles.featureItem}>
-              <Text category="h4" style={styles.featureIcon}>🔍</Text>
+              <Feather name="search" size={32} color="#FF8610" />
               <Text category="s1" style={styles.featureText}>Real-time card pricing</Text>
             </Layout>
             <Layout style={styles.featureItem}>
-              <Text category="h4" style={styles.featureIcon}>👥</Text>
+              <Feather name="users" size={32} color="#FF8610" />
               <Text category="s1" style={styles.featureText}>Share collections with friends</Text>
             </Layout>
             <Layout style={styles.featureItem}>
-              <Text category="h4" style={styles.featureIcon}>🔄</Text>
+              <Feather name="refresh-cw" size={32} color="#FF8610" />
               <Text category="s1" style={styles.featureText}>Digital trade negotiations</Text>
             </Layout>
           </Card>
@@ -174,8 +179,17 @@ const styles = StyleSheet.create({
   userEmail: {
     marginTop: 4,
   },
-  signOutButton: {
+  headerButtons: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
     marginLeft: 10,
+  },
+  profileButton: {
+    width: 100,
+    marginBottom: 8,
+  },
+  signOutButton: {
+    width: 100,
   },
   description: {
     marginBottom: 30,

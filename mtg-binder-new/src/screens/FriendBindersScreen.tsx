@@ -8,6 +8,7 @@ import {
   ImageBackground,
   View
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Binder } from '../types';
@@ -72,7 +73,7 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
       <ScrollView style={styles.content}>
         {binders.length === 0 ? (
           <Layout style={styles.emptyState}>
-            <Text category="h1" style={styles.emptyIcon}>📚</Text>
+            <Feather name="book" size={64} color="#FF8610" />
             <Text category="h5" style={styles.emptyTitle}>No public binders</Text>
             <Text category="s1" appearance="hint" style={styles.emptyDescription} center>
               {friendName} hasn't made any binders public yet, or they don't have any binders.

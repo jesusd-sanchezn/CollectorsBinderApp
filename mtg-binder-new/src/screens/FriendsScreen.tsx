@@ -6,6 +6,7 @@ import {
   Modal,
   TouchableOpacity
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Input, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
@@ -192,7 +193,7 @@ export default function FriendsScreen({ navigation }: Props) {
         {activeTab === 'friends' ? (
           friends.length === 0 ? (
             <Layout style={styles.emptyState}>
-              <Text category="h1" style={styles.emptyIcon}>👥</Text>
+              <Feather name="users" size={64} color="#FF8610" />
               <Text category="h5" style={styles.emptyTitle}>No friends yet</Text>
               <Text category="s1" appearance="hint" style={styles.emptyDescription} center>
                 Add friends to see their MTG collections and trade cards
@@ -211,16 +212,18 @@ export default function FriendsScreen({ navigation }: Props) {
                     size="small"
                     style={styles.viewButton}
                     onPress={() => handleViewFriendBinders(friend)}
+                    accessoryLeft={() => <Feather name="book" size={16} color="#FFFFFF" />}
                   >
-                    📚 View Binders
+                    View Binders
                   </Button>
                   <Button 
                     status="danger"
                     size="small"
                     style={styles.removeButton}
                     onPress={() => handleRemoveFriend(friend)}
+                    accessoryLeft={() => <Feather name="trash-2" size={16} color="#FFFFFF" />}
                   >
-                    🗑️
+                    
                   </Button>
                 </Layout>
               </Card>
@@ -251,16 +254,18 @@ export default function FriendsScreen({ navigation }: Props) {
                     size="small"
                     style={styles.acceptButton}
                     onPress={() => handleAcceptRequest(request.id)}
+                    accessoryLeft={() => <Feather name="check" size={16} color="#FFFFFF" />}
                   >
-                    ✓ Accept
+                    Accept
                   </Button>
                   <Button 
                     status="danger"
                     size="small"
                     style={styles.declineButton}
                     onPress={() => handleDeclineRequest(request.id)}
+                    accessoryLeft={() => <Feather name="x" size={16} color="#FFFFFF" />}
                   >
-                    ✗ Decline
+                    Decline
                   </Button>
                 </Layout>
               </Card>
