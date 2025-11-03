@@ -7,11 +7,6 @@ import * as eva from '@eva-design/eva';
 import { ApplicationProvider } from '@ui-kitten/components';
 import { navigationRef } from './src/lib/navigationRef';
 
-// Note: IconRegistry and EvaIconsPack are optional - we're using emoji icons in screens
-// If you need UI Kitten icons later, uncomment and import:
-// import { IconRegistry } from '@ui-kitten/components';
-// import { EvaIconsPack } from '@ui-kitten/eva-icons';
-
 // Custom theme with orange primary color
 const customTheme = {
   ...eva.dark,

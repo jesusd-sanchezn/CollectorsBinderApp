@@ -151,7 +151,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
           <Button
             style={styles.saveButton}
-            status="success"
+            status="primary"
             size="large"
             onPress={handleSave}
             disabled={saving}

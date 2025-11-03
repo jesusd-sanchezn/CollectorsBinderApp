@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
+import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Firebase configuration - using environment variables for security
@@ -33,5 +34,6 @@ try {
 export { auth };
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
+export const storage = getStorage(app);
 
 export default app;

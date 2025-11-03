@@ -158,7 +158,7 @@ export default function FriendsScreen({ navigation }: Props) {
       <Layout style={styles.header} level="2">
         <Text category="h4" style={styles.title}>Friends</Text>
         <Button 
-          status="success"
+          status="primary"
           size="small"
           onPress={() => setShowAddFriendModal(true)}
         >
@@ -247,7 +247,7 @@ export default function FriendsScreen({ navigation }: Props) {
                 </Layout>
                 <Layout style={styles.requestActions}>
                   <Button 
-                    status="success"
+                    status="primary"
                     size="small"
                     style={styles.acceptButton}
                     onPress={() => handleAcceptRequest(request.id)}
@@ -287,7 +287,7 @@ export default function FriendsScreen({ navigation }: Props) {
             </Button>
             <Text category="h6" style={styles.modalTitle}>Add Friend</Text>
             <Button
-              status="success"
+              status="primary"
               size="small"
               onPress={handleAddFriend}
               disabled={addingFriend}

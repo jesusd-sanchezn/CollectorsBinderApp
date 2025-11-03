@@ -44,7 +44,7 @@ export default function HomeScreen({ navigation }: Props) {
           <Layout style={styles.header} level="2">
             <Layout style={styles.headerTextContainer}>
               <Text category="h2" style={styles.welcome}>Welcome to MTG Binder!</Text>
-              <Text category="s1" status="success" style={styles.userEmail}>{user?.email}</Text>
+              <Text category="s1" status="primary" style={styles.userEmail}>{user?.email}</Text>
             </Layout>
             <Button 
               status="danger" 

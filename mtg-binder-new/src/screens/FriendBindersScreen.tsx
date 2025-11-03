@@ -5,6 +5,7 @@ import {
   Alert, 
   TouchableOpacity,
   Image,
+  ImageBackground,
   View
 } from 'react-native';
 import { Layout, Text, Button, Card, Spinner } from '@ui-kitten/components';
@@ -79,43 +80,75 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
           </Layout>
         ) : (
           binders.map((binder) => (
-            <Card
-              key={binder.id}
-              style={styles.binderCard}
-            >
-              <View style={styles.binderWrapper}>
-                {binder.backgroundImageUrl && (
-                  <Image 
-                    source={{ uri: binder.backgroundImageUrl }} 
-                    style={styles.binderBackground}
-                    resizeMode="cover"
-                  />
-                )}
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => openBinder(binder)}
-                  style={styles.binderTouchable}
+            binder.backgroundImageUrl ? (
+              <View key={binder.id} style={styles.binderCardContainer}>
+                <ImageBackground
+                  source={{ uri: binder.backgroundImageUrl }}
+                  style={styles.binderWrapper}
+                  imageStyle={styles.binderBackgroundImage}
+                  resizeMode="cover"
                 >
-                  <Layout style={styles.binderContent}>
-                    <Layout style={styles.binderHeader}>
-                      <Text category="h6" style={styles.binderName}>{binder.name}</Text>
-                      <Layout style={styles.binderStatus}>
-                        <Text category="c1" style={styles.statusText}>Public</Text>
+                  <View style={styles.binderOverlay}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => openBinder(binder)}
+                      style={styles.binderTouchable}
+                    >
+                      <Layout style={styles.binderContent}>
+                        <Layout style={styles.binderHeader}>
+                          <Text category="h6" style={styles.binderName}>{binder.name}</Text>
+                          <Layout style={styles.binderStatus}>
+                            <Text category="c1" style={styles.statusText}>Public</Text>
+                          </Layout>
+                        </Layout>
+                        <Text category="s1" appearance="hint" style={styles.binderDescription}>{binder.description}</Text>
+                        <View style={styles.binderSpacer} />
+                        <Layout style={styles.binderStats}>
+                          <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
+                          <Text category="c1" appearance="hint" style={styles.statText}>
+                            Updated {binder.updatedAt ? 
+                              (binder.updatedAt.toDate ? binder.updatedAt.toDate().toLocaleDateString() : 'Recently') 
+                              : 'Recently'}
+                          </Text>
+                        </Layout>
+                      </Layout>
+                    </TouchableOpacity>
+                  </View>
+                </ImageBackground>
+              </View>
+            ) : (
+              <Card
+                key={binder.id}
+                style={styles.binderCard}
+              >
+                <View style={styles.binderWrapper}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => openBinder(binder)}
+                    style={styles.binderTouchable}
+                  >
+                    <Layout style={styles.binderContent}>
+                      <Layout style={styles.binderHeader}>
+                        <Text category="h6" style={styles.binderName}>{binder.name}</Text>
+                        <Layout style={styles.binderStatus}>
+                          <Text category="c1" style={styles.statusText}>Public</Text>
+                        </Layout>
+                      </Layout>
+                      <Text category="s1" appearance="hint" style={styles.binderDescription}>{binder.description}</Text>
+                      <View style={styles.binderSpacer} />
+                      <Layout style={styles.binderStats}>
+                        <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
+                        <Text category="c1" appearance="hint" style={styles.statText}>
+                          Updated {binder.updatedAt ? 
+                            (binder.updatedAt.toDate ? binder.updatedAt.toDate().toLocaleDateString() : 'Recently') 
+                            : 'Recently'}
+                        </Text>
                       </Layout>
                     </Layout>
-                    <Text category="s1" appearance="hint" style={styles.binderDescription}>{binder.description}</Text>
-                    <Layout style={styles.binderStats}>
-                      <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
-                      <Text category="c1" appearance="hint" style={styles.statText}>
-                        Updated {binder.updatedAt ? 
-                          (binder.updatedAt.toDate ? binder.updatedAt.toDate().toLocaleDateString() : 'Recently') 
-                          : 'Recently'}
-                      </Text>
-                    </Layout>
-                  </Layout>
-                </TouchableOpacity>
-              </View>
-            </Card>
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            )
           ))
         )}
       </ScrollView>
@@ -173,34 +206,62 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     paddingHorizontal: 20,
   },
+  binderCardContainer: {
+    marginBottom: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
   binderCard: {
     marginBottom: 12,
   },
   binderWrapper: {
-    position: 'relative',
+    width: '100%',
+    minHeight: 160,
+    borderRadius: 8,
     overflow: 'hidden',
-    minHeight: 100,
+    position: 'relative',
   },
-  binderBackground: {
+  binderBackgroundImage: {
+    opacity: 0.5,
+    resizeMode: 'cover',
+  },
+  binderOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    opacity: 0.3,
+    backgroundColor: 'transparent',
   },
   binderTouchable: {
-    position: 'relative',
-    zIndex: 1,
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   binderContent: {
+    flex: 1,
     padding: 16,
+    paddingTop: 10,
+    paddingBottom: 5,
+    backgroundColor: 'transparent',
+    flexDirection: 'column',
+  },
+  binderSpacer: {
+    flex: 1,
+    minHeight: 10,
   },
   binderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 8,
+    borderRadius: 6,
   },
   binderName: {
     flex: 1,
@@ -210,6 +271,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
+    backgroundColor: 'transparent',
   },
   statusText: {
     marginBottom: 0,
@@ -221,6 +283,9 @@ const styles = StyleSheet.create({
   binderStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 8,
+    borderRadius: 6,
   },
   statText: {
     marginBottom: 0,

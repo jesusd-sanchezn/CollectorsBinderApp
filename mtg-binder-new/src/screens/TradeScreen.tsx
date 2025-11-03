@@ -165,7 +165,7 @@ export default function TradeScreen({ navigation }: Props) {
                   {isRecipient && isPending && (
                     <Layout style={styles.actions}>
                       <Button
-                        status="success"
+                        status="primary"
                         size="small"
                         style={styles.actionButton}
                         onPress={() => handleAcceptTrade(trade.id)}

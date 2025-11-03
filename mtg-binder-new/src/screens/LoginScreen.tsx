@@ -110,7 +110,7 @@ export default function LoginScreen({ navigation }: Props) {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Layout style={styles.content}>
-          <Text category="h1" status="success" style={styles.title}>MTG Binder</Text>
+          <Text category="h1" status="primary" style={styles.title}>MTG Binder</Text>
           <Text category="s1" appearance="hint" style={styles.subtitle} center>
             Share your Magic: The Gathering collection with friends and trade cards digitally
           </Text>
@@ -173,7 +173,7 @@ export default function LoginScreen({ navigation }: Props) {
             
             <Button
               style={styles.button}
-              status="success"
+              status="primary"
               size="large"
               onPress={handleEmailAuth}
               disabled={loading}
@@ -184,7 +184,7 @@ export default function LoginScreen({ navigation }: Props) {
             
             <Button
               appearance="ghost"
-              status="success"
+              status="primary"
               size="small"
               style={styles.switchButton}
               onPress={() => setIsLogin(!isLogin)}

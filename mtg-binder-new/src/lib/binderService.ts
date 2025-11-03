@@ -12,8 +12,9 @@ import {
   orderBy,
   serverTimestamp 
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions, auth } from './firebase';
+import { db, functions, auth, storage } from './firebase';
 import { Binder, BinderPage, BinderSlot, Card } from '../types';
 
 // Initialize functions (we'll need to add this to firebase.ts)
@@ -33,7 +34,6 @@ export class BinderService {
   static async createBinder(name: string, description?: string, isPublic: boolean = true): Promise<string> {
     try {
       const userId = this.getCurrentUserId();
-      console.log('Creating binder for user:', userId);
       
       const binderData = {
         name,
@@ -45,9 +45,7 @@ export class BinderService {
         ownerId: userId,
       };
 
-      console.log('Binder data:', binderData);
       const docRef = await addDoc(collection(db, 'binders'), binderData);
-      console.log('Binder created with ID:', docRef.id);
       return docRef.id;
     } catch (error) {
       console.error('Error creating binder:', error);
@@ -74,7 +72,6 @@ export class BinderService {
   static async getUserBinders(): Promise<Binder[]> {
     try {
       const userId = this.getCurrentUserId();
-      console.log('Fetching binders for user:', userId);
       
       const q = query(
         collection(db, 'binders'),
@@ -83,14 +80,12 @@ export class BinderService {
       );
       
       const querySnapshot = await getDocs(q);
-      console.log('Query snapshot size:', querySnapshot.size);
       
       const binders = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Binder));
       
-      console.log('Found binders:', binders.length);
       return binders;
     } catch (error) {
       console.error('Error fetching binders:', error);
@@ -282,8 +277,6 @@ export class BinderService {
         pages: newPages,
         updatedAt: serverTimestamp()
       });
-
-      console.log(`Rearranged ${totalCards} cards into ${pagesNeeded} pages`);
     } catch (error) {
       console.error('Error rearranging cards:', error);
       throw error;
@@ -305,6 +298,46 @@ export class BinderService {
     } catch (error) {
       console.error('Error importing CSV:', error);
       throw error;
+    }
+  }
+
+  // Helper method to convert URI to Blob using XMLHttpRequest
+  private static uriToBlob(uri: string): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+        resolve(xhr.response);
+      };
+      xhr.onerror = function () {
+        reject(new Error('Failed to convert URI to Blob'));
+      };
+      xhr.responseType = 'blob';
+      xhr.open('GET', uri, true);
+      xhr.send(null);
+    });
+  }
+
+  // Upload image to Firebase Storage and get URL
+  static async uploadImage(uri: string, binderId: string): Promise<string> {
+    try {
+      const userId = this.getCurrentUserId();
+      
+      // Convert URI to Blob
+      const blob = await this.uriToBlob(uri);
+      
+      // Create a reference to the storage location
+      const imageRef = ref(storage, `binder-backgrounds/${userId}/${binderId}-${Date.now()}.jpg`);
+      
+      // Upload the blob
+      await uploadBytes(imageRef, blob);
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(imageRef);
+      
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw new Error('Failed to upload image');
     }
   }
 

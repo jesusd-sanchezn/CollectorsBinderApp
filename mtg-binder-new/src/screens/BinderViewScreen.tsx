@@ -656,7 +656,7 @@ export default function BinderViewScreen({ route }: Props) {
             </Button>
             <Text category="h6" style={styles.modalTitle}>Import Cards from CSV</Text>
             <Button
-              status="success"
+              status="primary"
               size="small"
               onPress={importCSV}
               disabled={importing}
@@ -771,7 +771,7 @@ export default function BinderViewScreen({ route }: Props) {
 
             <Layout style={styles.confirmFooter}>
               <Button 
-                status="success"
+                status="primary"
                 size="large"
                 style={styles.confirmButton}
                 onPress={handleConfirmTrade}
