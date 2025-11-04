@@ -7,7 +7,8 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   FacebookAuthProvider,
-  signInWithCredential
+  signInWithCredential,
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -21,6 +22,7 @@ interface AuthState {
   signInWithGoogle: () => Promise<void>;
   signInWithFacebook: () => Promise<void>;
   signOut: () => Promise<void>;
+  sendPasswordResetEmail: (email: string) => Promise<void>;
   initializeAuth: () => void;
   getUserProfile: () => Promise<any>;
   updateProfile: (data: { displayName?: string; country?: string }) => Promise<void>;
@@ -126,6 +128,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error('Sign out error:', error);
       throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  sendPasswordResetEmail: async (email: string) => {
+    try {
+      set({ loading: true });
+      await firebaseSendPasswordResetEmail(auth, email.trim().toLowerCase());
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      // Provide user-friendly error messages
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('No account found with this email address.');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('Please enter a valid email address.');
+      } else {
+        throw new Error(error.message || 'Failed to send password reset email. Please try again.');
+      }
     } finally {
       set({ loading: false });
     }

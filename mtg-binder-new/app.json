@@ -1,36 +1,45 @@
 {
   "expo": {
-    "name": "mtg-binder-new",
-    "slug": "mtg-binder-new",
+    "name": "MTG Binder",
+    "slug": "mtg-binder",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "notification": {
       "icon": "./assets/icon.png",
-      "color": "#4CAF50",
+      "color": "#FF8610",
       "iosDisplayInForeground": true,
       "androidMode": "default"
     },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1A1A1A"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mtgbinder.app",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.mtgbinder.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1A1A1A"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id-here"
+      }
     }
   }
 }

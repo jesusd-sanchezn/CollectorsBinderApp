@@ -6,6 +6,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as eva from '@eva-design/eva';
 import { ApplicationProvider } from '@ui-kitten/components';
 import { navigationRef } from './src/lib/navigationRef';
@@ -120,25 +121,29 @@ export default function App() {
   if (!initialized) {
     return (
       <ApplicationProvider mapping={eva.mapping} theme={customTheme}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF8610" />
-        </View>
+        <SafeAreaProvider>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FF8610" />
+          </View>
+        </SafeAreaProvider>
       </ApplicationProvider>
     );
   }
 
   return (
     <ApplicationProvider mapping={eva.mapping} theme={customTheme}>
-      <NavigationContainer ref={navigationRef}>
-        <StatusBar style="light" />
-        <Stack.Navigator 
-          screenOptions={{ 
-            headerShown: true,
-            headerStyle: { backgroundColor: '#222B45' },
-            headerTintColor: '#FFFFFF',
-            headerTitleStyle: { fontWeight: 'bold' }
-          }}
-        >
+      <SafeAreaProvider>
+        <NavigationContainer ref={navigationRef}>
+          <StatusBar style="light" />
+          <Stack.Navigator 
+            screenOptions={{ 
+              headerShown: true,
+              headerStyle: { backgroundColor: '#222B45' },
+              headerTintColor: '#FFFFFF',
+              headerTitleStyle: { fontWeight: 'bold' },
+              contentStyle: { backgroundColor: '#1A1A1A' }
+            }}
+          >
           {user ? (
             // User is signed in
             <>
@@ -192,6 +197,7 @@ export default function App() {
           )}
         </Stack.Navigator>
       </NavigationContainer>
+      </SafeAreaProvider>
     </ApplicationProvider>
   );
 }
