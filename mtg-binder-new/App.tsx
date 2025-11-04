@@ -1,3 +1,6 @@
+// Import warning suppression first, before any other imports
+import './src/lib/suppressNotificationsWarning';
+
 import React, { useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -43,6 +46,7 @@ import { useAuthStore } from './src/state/useAuthStore';
 // Import notification service
 import { NotificationService } from './src/lib/notificationService';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 
 export type RootStackParamList = {
   Login: undefined;

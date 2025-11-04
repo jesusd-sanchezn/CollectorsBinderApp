@@ -21,6 +21,7 @@ export interface Friend {
   friendId: string;
   friendEmail: string;
   friendName: string;
+  friendCountry?: string;
   status: 'pending' | 'accepted' | 'blocked';
   createdAt: any; // Firebase Timestamp
   updatedAt: any; // Firebase Timestamp
@@ -166,12 +167,21 @@ export class FriendsService {
         updatedAt: serverTimestamp()
       });
 
+      // Fetch current user's display name
+      const currentUser = auth.currentUser;
+      const currentUserDisplayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Unknown';
+
+      // Fetch friend's display name from users collection
+      const friendUserDoc = await getDoc(doc(db, 'users', requestData.fromUserId));
+      const friendUserData = friendUserDoc.data();
+      const friendDisplayName = friendUserData?.displayName || friendUserData?.email?.split('@')[0] || requestData.fromUserName || 'Unknown';
+
       // Create friendship for both users
       const friendshipData1 = {
         userId: requestData.fromUserId,
         friendId: requestData.toUserId,
         friendEmail: requestData.toUserEmail,
-        friendName: requestData.fromUserName, // This should be the current user's name
+        friendName: currentUserDisplayName, // Current user's name (the accepter)
         status: 'accepted',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -181,7 +191,7 @@ export class FriendsService {
         userId: requestData.toUserId,
         friendId: requestData.fromUserId,
         friendEmail: requestData.fromUserEmail,
-        friendName: requestData.fromUserName,
+        friendName: friendDisplayName, // Friend's display name from users collection
         status: 'accepted',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -246,15 +256,64 @@ export class FriendsService {
       const q = query(
         collection(db, 'friendships'),
         where('userId', '==', currentUserId),
-        where('status', '==', 'accepted'),
-        orderBy('friendName', 'asc')
+        where('status', '==', 'accepted')
       );
       
       const querySnapshot = await getDocs(q);
-      const friends = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Friend));
+      
+      // Fetch current display names from users collection for each friend
+      const friendsPromises = querySnapshot.docs.map(async (friendshipDoc) => {
+        const friendData = friendshipDoc.data() as Friend;
+        
+        // Ensure friendId is not the current user (shouldn't happen, but safety check)
+        if (friendData.friendId === currentUserId) {
+          console.error(`Invalid friendship: friendId matches currentUserId: ${currentUserId}`);
+          return null;
+        }
+        
+        let friendDisplayName = 'Unknown';
+        
+        try {
+          // Fetch friend's current display name from users collection using friendId
+          const friendUserDoc = await getDoc(doc(db, 'users', friendData.friendId));
+          
+          if (!friendUserDoc.exists()) {
+            console.warn(`User document not found for friendId: ${friendData.friendId}`);
+            friendDisplayName = friendData.friendName || 'Unknown';
+          } else {
+            const friendUserData = friendUserDoc.data();
+            // Always use the display name from users collection, never the stored friendName
+            friendDisplayName = friendUserData?.displayName || 
+                                friendUserData?.email?.split('@')[0] || 
+                                'Unknown';
+            
+            // Get country from user data
+            friendData.friendCountry = friendUserData?.country || undefined;
+            
+            // Debug log to verify we're getting the right user and country
+            console.log(`Friend ${friendData.friendId}: Display name "${friendDisplayName}", Country: "${friendUserData?.country || 'none'}"`);
+          }
+        } catch (error) {
+          console.error(`Error fetching friend ${friendData.friendId} display name:`, error);
+          // Fallback to stored friendName only if fetch fails
+          friendDisplayName = friendData.friendName || 'Unknown';
+        }
+        
+        // Return new object with updated friendName and country from users collection
+        return {
+          id: friendshipDoc.id,
+          ...friendData,
+          friendName: friendDisplayName,
+          friendCountry: friendData.friendCountry || undefined
+        } as Friend;
+      });
+      
+      // Filter out any null results from invalid friendships
+      const friendsResults = await Promise.all(friendsPromises);
+      const friends = friendsResults.filter((friend): friend is Friend => friend !== null);
+      
+      // Sort by display name after fetching
+      friends.sort((a, b) => (a.friendName || '').localeCompare(b.friendName || ''));
       
       return friends;
     } catch (error) {

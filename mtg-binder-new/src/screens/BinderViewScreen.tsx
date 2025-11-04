@@ -6,8 +6,7 @@ import {
   Modal,
   Dimensions,
   Image,
-  View,
-  Alert
+  View
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Input, Spinner } from '@ui-kitten/components';
@@ -101,7 +100,7 @@ export default function BinderViewScreen({ route }: Props) {
       }
     } catch (error) {
       console.error('Error loading binder:', error);
-      Alert.alert('Error', 'Failed to load binder');
+      showAlertModal('Error', 'Failed to load binder');
     } finally {
       setLoading(false);
     }
@@ -109,7 +108,7 @@ export default function BinderViewScreen({ route }: Props) {
 
   const importCSV = async () => {
     if (!csvData.trim()) {
-      Alert.alert('Error', 'Please paste your CSV data');
+      showAlertModal('Error', 'Please paste your CSV data');
       return;
     }
 
@@ -120,12 +119,12 @@ export default function BinderViewScreen({ route }: Props) {
       const parseResult = CSVParser.parseDelverLensCSV(csvData);
       
       if (!parseResult.success) {
-        Alert.alert('CSV Parse Error', parseResult.errors.join('\n'));
+        showAlertModal('CSV Parse Error', parseResult.errors.join('\n'), 'warning');
         return;
       }
 
       // Convert to app format with real card images
-      Alert.alert('Loading Images', `Fetching card images from Scryfall for ${parseResult.cards.length} cards... This may take a few minutes.`);
+      showAlertModal('Loading Images', `Fetching card images from Scryfall for ${parseResult.cards.length} cards... This may take a few minutes.`, 'warning');
       const appCards = await CSVParser.convertToAppCards(parseResult.cards);
       
               // Add cards to the binder using BinderService
@@ -200,13 +199,13 @@ export default function BinderViewScreen({ route }: Props) {
                 
                 // Also reload from Firebase to ensure consistency
                 await loadBinder();
-                Alert.alert('Success', `Imported ${importedCount} cards successfully!`);
+                showAlertModal('Success', `Imported ${importedCount} cards successfully!`, 'success');
                 setCsvData('');
                 setShowImportModal(false);
               }
     } catch (error) {
       console.error('Error importing CSV:', error);
-      Alert.alert('Error', 'Failed to import CSV. Please check the format.');
+      showAlertModal('Error', 'Failed to import CSV. Please check the format.');
     } finally {
       setImporting(false);
     }
@@ -218,7 +217,7 @@ export default function BinderViewScreen({ route }: Props) {
       await loadBinder(); // Reload to get updated data
     } catch (error) {
       console.error('Error adding page:', error);
-      Alert.alert('Error', 'Failed to add page');
+      showAlertModal('Error', 'Failed to add page');
     }
   };
 
@@ -269,7 +268,7 @@ export default function BinderViewScreen({ route }: Props) {
   // Confirm trade and send notification
   const handleConfirmTrade = async () => {
     if (!user || selectedCardsForTrade.size === 0) {
-      Alert.alert('Error', 'Please select at least one card');
+      showAlertModal('Error', 'Please select at least one card');
       return;
     }
 
@@ -302,25 +301,20 @@ export default function BinderViewScreen({ route }: Props) {
       );
 
       // Success!
-      Alert.alert(
+      showAlertModal(
         'Trade Request Sent!',
         `Your trade request for ${wants.length} card${wants.length === 1 ? '' : 's'} has been sent to ${ownerName}. They will receive a notification.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Reset selection
-              setSelectionMode(false);
-              setSelectedCardsForTrade(new Map());
-              setShowConfirmModal(false);
-            }
-          }
-        ]
+        'success'
       );
+      
+      // Reset selection
+      setSelectionMode(false);
+      setSelectedCardsForTrade(new Map());
+      setShowConfirmModal(false);
 
     } catch (error) {
       console.error('Error creating trade:', error);
-      Alert.alert('Error', 'Failed to create trade request. Please try again.');
+      showAlertModal('Error', 'Failed to create trade request. Please try again.');
     } finally {
       setCreatingTrade(false);
     }
@@ -329,32 +323,19 @@ export default function BinderViewScreen({ route }: Props) {
   const handleRearrangeCards = async () => {
     if (!binder) return;
 
+    setShowRearrangeConfirm(true);
+  };
+
+  const confirmRearrangeCards = async () => {
     try {
-      Alert.alert(
-        'Rearrange Cards',
-        'This will reorganize all cards to fill empty slots and remove empty pages. Continue?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Rearrange',
-            onPress: async () => {
-              try {
-                await BinderService.rearrangeCards(binderId);
-                await loadBinder();
-                Alert.alert('Success', 'Cards rearranged successfully!');
-              } catch (error) {
-                console.error('Error rearranging cards:', error);
-                Alert.alert('Error', 'Failed to rearrange cards');
-              }
-            },
-          },
-        ]
-      );
+      await BinderService.rearrangeCards(binderId);
+      await loadBinder();
+      showAlertModal('Success', 'Cards rearranged successfully!', 'success');
     } catch (error) {
-      console.error('Error in rearrange confirmation:', error);
+      console.error('Error rearranging cards:', error);
+      showAlertModal('Error', 'Failed to rearrange cards');
+    } finally {
+      setShowRearrangeConfirm(false);
     }
   };
 
@@ -384,53 +365,43 @@ export default function BinderViewScreen({ route }: Props) {
   };
 
   const handleDeleteCard = async () => {
+    if (!selectedCardSlot || !binder || !selectedCard) {
+      return;
+    }
+
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteCard = async () => {
     if (!selectedCardSlot || !binder) {
+      setShowDeleteConfirm(false);
       return;
     }
 
     try {
-      // Show confirmation dialog
-      Alert.alert(
-        'Delete Card',
-        `Are you sure you want to delete "${selectedCard?.name}"?`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                // Remove card from Firebase
-                await BinderService.removeCardFromSlot(
-                  binderId,
-                  selectedCardSlot.pageNumber,
-                  selectedCardSlot.slotPosition
-                );
-
-                // Rearrange cards to fill empty slots and remove empty pages
-                await BinderService.rearrangeCards(binderId);
-
-                // Reload binder to get the rearranged data
-                await loadBinder();
-                
-                setShowCardModal(false);
-                setSelectedCard(null);
-                setSelectedCardSlot(null);
-
-                Alert.alert('Success', 'Card deleted and binder rearranged!');
-              } catch (error) {
-                console.error('Error deleting card:', error);
-                Alert.alert('Error', 'Failed to delete card');
-              }
-            },
-          },
-        ]
+      // Remove card from Firebase
+      await BinderService.removeCardFromSlot(
+        binderId,
+        selectedCardSlot.pageNumber,
+        selectedCardSlot.slotPosition
       );
+
+      // Rearrange cards to fill empty slots and remove empty pages
+      await BinderService.rearrangeCards(binderId);
+
+      // Reload binder to get the rearranged data
+      await loadBinder();
+      
+      setShowCardModal(false);
+      setSelectedCard(null);
+      setSelectedCardSlot(null);
+
+      showAlertModal('Success', 'Card deleted and binder rearranged!', 'success');
     } catch (error) {
-      console.error('Error in delete confirmation:', error);
+      console.error('Error deleting card:', error);
+      showAlertModal('Error', 'Failed to delete card');
+    } finally {
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -589,7 +560,7 @@ export default function BinderViewScreen({ route }: Props) {
         {!isOwner && (
           <Layout style={styles.headerActions}>
             <Button 
-              status={selectionMode ? "danger" : "success"}
+              status={selectionMode ? "danger" : "primary"}
               size="small"
               style={styles.actionButton}
               onPress={toggleSelectionMode}
@@ -882,6 +853,28 @@ export default function BinderViewScreen({ route }: Props) {
         type={alertType}
         onClose={() => setShowAlert(false)}
       />
+
+      <ConfirmModal
+        visible={showDeleteConfirm}
+        title="Delete Card"
+        message={`Are you sure you want to delete "${selectedCard?.name}"?`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmStatus="danger"
+        onConfirm={confirmDeleteCard}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <ConfirmModal
+        visible={showRearrangeConfirm}
+        title="Rearrange Cards"
+        message="This will reorganize all cards to fill empty slots and remove empty pages. Continue?"
+        confirmText="Rearrange"
+        cancelText="Cancel"
+        confirmStatus="warning"
+        onConfirm={confirmRearrangeCards}
+        onCancel={() => setShowRearrangeConfirm(false)}
+      />
     </Layout>
   );
 }
@@ -948,7 +941,7 @@ const styles = StyleSheet.create({
     marginBottom: 10, // Reduced from 20 to 10
   },
   navButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FF8610',
     paddingHorizontal: 12, // Reduced from 16 to 12
     paddingVertical: 6, // Reduced from 8 to 6
     borderRadius: 4, // Reduced from 6 to 4
@@ -1076,7 +1069,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   cardPrice: {
-    color: '#4CAF50',
+    color: '#FF8610',
     fontSize: 11, // Larger for better readability
     fontWeight: 'bold',
   },
@@ -1092,7 +1085,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#333',
   },
   cancelButton: {
-    color: '#4CAF50',
+    color: '#FF8610',
     fontSize: 16,
   },
   modalTitle: {
@@ -1101,7 +1094,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   importButton: {
-    color: '#4CAF50',
+    color: '#FF8610',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1251,7 +1244,7 @@ const styles = StyleSheet.create({
   },
   cardDetailPrice: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: '#FF8610',
     fontWeight: 'bold',
   },
   loadingOverlay: {
@@ -1281,12 +1274,12 @@ const styles = StyleSheet.create({
   // Selection Mode Styles
   cardSlotSelectionMode: {
     borderWidth: 2,
-    borderColor: '#4CAF50',
+    borderColor: '#FF8610',
   },
   cardSlotSelected: {
-    borderColor: '#4CAF50',
+    borderColor: '#FF8610',
     borderWidth: 3,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'rgba(255, 134, 16, 0.1)',
   },
   selectionCheckbox: {
     position: 'absolute',
@@ -1303,8 +1296,8 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   selectionCheckboxSelected: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    backgroundColor: '#FF8610',
+    borderColor: '#FF8610',
   },
   selectionCheckmark: {
     color: '#fff',
@@ -1312,7 +1305,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   actionButtonActive: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FF8610',
   },
   reviewButton: {
     backgroundColor: '#2196F3',
@@ -1341,6 +1334,8 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF8610',
   },
   selectedCardImage: {
     width: 60,
@@ -1371,7 +1366,7 @@ const styles = StyleSheet.create({
     paddingTop: 30,
   },
   confirmButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FF8610',
     borderRadius: 8,
     paddingVertical: 15,
     paddingHorizontal: 20,

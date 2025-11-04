@@ -31,9 +31,6 @@ export default function LoginScreen({ navigation }: Props) {
     initialized, 
     signInWithEmail, 
     signUpWithEmail, 
-    signInWithGoogle, 
-    signInWithFacebook, 
-    signOut,
     initializeAuth 
   } = useAuthStore();
 
@@ -79,21 +76,6 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    try {
-      await signInWithGoogle();
-    } catch (error: any) {
-      showAlertModal('Error', error.message || 'Google sign-in failed');
-    }
-  };
-
-  const handleFacebookSignIn = async () => {
-    try {
-      await signInWithFacebook();
-    } catch (error: any) {
-      showAlertModal('Error', error.message || 'Facebook sign-in failed');
-    }
-  };
 
   if (!initialized) {
     return (
@@ -195,32 +177,6 @@ export default function LoginScreen({ navigation }: Props) {
             </Button>
           </Card>
 
-          {/* Social Sign-In */}
-          <Layout style={styles.socialContainer}>
-            <Text category="s1" appearance="hint" style={styles.socialTitle} center>Or continue with</Text>
-            
-            <Button
-              style={styles.button}
-              status="danger"
-              size="large"
-              onPress={handleGoogleSignIn}
-              disabled={loading}
-              accessoryLeft={() => <Feather name="search" size={20} color="#FFFFFF" />}
-            >
-              Sign in with Google
-            </Button>
-            
-            <Button
-              style={styles.button}
-              status="info"
-              size="large"
-              onPress={handleFacebookSignIn}
-              disabled={loading}
-            >
-              📘 Sign in with Facebook
-            </Button>
-          </Layout>
-
           <Text category="s1" appearance="hint" style={styles.description} center>
             Create digital binders, share with friends, and trade cards without the hassle of physical binders!
           </Text>
@@ -282,13 +238,6 @@ const styles = StyleSheet.create({
   },
   switchButton: {
     marginTop: 10,
-  },
-  socialContainer: {
-    width: '100%',
-    marginBottom: 30,
-  },
-  socialTitle: {
-    marginBottom: 20,
   },
   description: {
     lineHeight: 20,

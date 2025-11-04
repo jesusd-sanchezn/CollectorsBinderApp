@@ -1,14 +1,38 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// Configure how notifications are handled when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Initialize notification handler lazily to avoid Expo Go warnings
+let notificationHandlerInitialized = false;
+
+const initializeNotificationHandler = () => {
+  if (notificationHandlerInitialized) return;
+  
+  try {
+    // Check if we're running in Expo Go
+    const isExpoGo = Constants.appOwnership === 'expo';
+    
+    // setNotificationHandler is safe to call in Expo Go (it only affects local notifications)
+    // The warning is about push notifications, not local notifications
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+    
+    notificationHandlerInitialized = true;
+  } catch (error) {
+    // Silently ignore notification setup errors
+    if (__DEV__) {
+      console.log('Notification handler initialization skipped (Expo Go limitation)');
+    }
+  }
+};
+
+// Initialize on first use
+initializeNotificationHandler();
 
 export interface NotificationData {
   type: 'friend_request' | 'friend_accepted' | 'trade_request' | 'trade_update' | 'trade_accepted' | 'trade_declined';
@@ -24,6 +48,17 @@ export class NotificationService {
   // Request notification permissions
   static async requestPermissions(): Promise<boolean> {
     try {
+      // Check if we're in Expo Go (push notifications don't work there)
+      const isExpoGo = Constants.appOwnership === 'expo';
+      
+      // In Expo Go, local notifications still work, but we'll skip permission requests
+      // to avoid the push notification warning
+      if (isExpoGo) {
+        // Local notifications can still work without explicit permission request in Expo Go
+        // Just return true to allow local notifications
+        return true;
+      }
+      
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
       
@@ -38,7 +73,12 @@ export class NotificationService {
       }
       
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      // Suppress the specific Expo Go warning about push notifications
+      if (error?.message?.includes('expo-notifications') || error?.message?.includes('Expo Go')) {
+        // In Expo Go, we can still use local notifications
+        return Constants.appOwnership === 'expo';
+      }
       console.error('Error requesting notification permissions:', error);
       return false;
     }
@@ -47,6 +87,13 @@ export class NotificationService {
   // Get the device push token
   static async getPushToken(): Promise<string | null> {
     try {
+      // Check if we're in Expo Go (push notifications don't work there)
+      const isExpoGo = Constants.appOwnership === 'expo';
+      if (isExpoGo) {
+        // In Expo Go, push tokens don't work, return null
+        return null;
+      }
+      
       const permissionsGranted = await this.requestPermissions();
       if (!permissionsGranted) {
         return null;
@@ -60,7 +107,11 @@ export class NotificationService {
       
       console.log('Notification permissions granted - local notifications ready');
       return 'local-only';
-    } catch (error) {
+    } catch (error: any) {
+      // Suppress Expo Go push notification warnings
+      if (error?.message?.includes('expo-notifications') || error?.message?.includes('Expo Go')) {
+        return null;
+      }
       console.error('Error getting push token:', error);
       return null;
     }
@@ -74,8 +125,15 @@ export class NotificationService {
     seconds: number = 0
   ): Promise<void> {
     try {
+      // Check if we're in Expo Go
+      const isExpoGo = Constants.appOwnership === 'expo';
+      if (isExpoGo) {
+        // Local notifications still work in Expo Go, just not push notifications
+        // Continue with local notification setup
+      }
+      
       const hasPermission = await this.requestPermissions();
-      if (!hasPermission) {
+      if (!hasPermission && !isExpoGo) {
         console.log('Cannot schedule notification: permissions not granted');
         return;
       }
@@ -89,7 +147,11 @@ export class NotificationService {
         },
         trigger: seconds > 0 ? { seconds } : null, // null means show immediately
       });
-    } catch (error) {
+    } catch (error: any) {
+      // Suppress Expo Go push notification warnings
+      if (error?.message?.includes('expo-notifications') && error?.message?.includes('Expo Go')) {
+        return;
+      }
       console.error('Error scheduling notification:', error);
     }
   }

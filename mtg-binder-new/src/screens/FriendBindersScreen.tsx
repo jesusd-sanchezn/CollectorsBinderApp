@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   ScrollView, 
-  Alert, 
   TouchableOpacity,
   Image,
   ImageBackground,
@@ -13,6 +12,7 @@ import { Layout, Text, Button, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Binder } from '../types';
 import { FriendsService } from '../lib/friendsService';
+import AlertModal from '../components/AlertModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'FriendBinders'>;
 
@@ -20,6 +20,19 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
   const { friendId, friendName } = route.params;
   const [binders, setBinders] = useState<Binder[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Alert modal state
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'danger'>('danger');
+  
+  const showAlertModal = (title: string, message: string, type: 'success' | 'danger' = 'danger') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setShowAlert(true);
+  };
 
   useEffect(() => {
     loadFriendBinders();
@@ -32,7 +45,7 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
       setBinders(friendBinders);
     } catch (error) {
       console.error('Error loading friend binders:', error);
-      Alert.alert('Error', 'Failed to load friend\'s binders');
+      showAlertModal('Error', 'Failed to load friend\'s binders');
     } finally {
       setLoading(false);
     }
@@ -153,6 +166,14 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
           ))
         )}
       </ScrollView>
+
+      <AlertModal
+        visible={showAlert}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setShowAlert(false)}
+      />
     </Layout>
   );
 }

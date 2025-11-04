@@ -177,7 +177,7 @@ const SwipeableTradeCard: React.FC<SwipeableTradeCardProps> = ({
           ]}
           pointerEvents="none"
         >
-          <Feather name="check" size={80} color="#00E096" />
+          <Feather name="check" size={80} color="#FF8610" />
           <Text category="h6" status="success" style={styles.indicatorText}>
             ACCEPT
           </Text>
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF8610',
   },
   statusAccepted: {
-    backgroundColor: '#00E096',
+    backgroundColor: '#FF8610',
   },
   statusDeclined: {
     backgroundColor: '#FF3D71',
@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
   },
   cardItemSelected: {
     borderWidth: 2,
-    borderColor: '#00E096',
+    borderColor: '#FF8610',
   },
   cardCheckbox: {
     width: 24,
@@ -642,8 +642,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   cardCheckboxSelected: {
-    backgroundColor: '#00E096',
-    borderColor: '#00E096',
+    backgroundColor: '#FF8610',
+    borderColor: '#FF8610',
   },
   cardImage: {
     width: 50,
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   acceptIndicator: {
-    backgroundColor: 'rgba(0, 224, 150, 0.1)',
+    backgroundColor: 'rgba(255, 134, 16, 0.1)',
   },
   declineIndicator: {
     backgroundColor: 'rgba(255, 61, 113, 0.1)',

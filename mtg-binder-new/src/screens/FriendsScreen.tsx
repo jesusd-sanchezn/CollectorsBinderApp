@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   ScrollView, 
-  Alert, 
   Modal,
   TouchableOpacity
 } from 'react-native';
@@ -11,6 +10,9 @@ import { Layout, Text, Button, Input, Card, Spinner } from '@ui-kitten/component
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { FriendsService, Friend, FriendRequest } from '../lib/friendsService';
+import { getCountryFlag } from '../lib/countryFlags';
+import AlertModal from '../components/AlertModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Friends'>;
 
@@ -46,6 +48,32 @@ export default function FriendsScreen({ navigation }: Props) {
   const [friendEmail, setFriendEmail] = useState('');
   const [addingFriend, setAddingFriend] = useState(false);
   const [activeTab, setActiveTab] = useState<'friends' | 'requests'>('friends');
+  
+  // Alert modal state
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'danger'>('danger');
+  
+  // Confirm modal state
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+  
+  const showAlertModal = (title: string, message: string, type: 'success' | 'danger' = 'danger') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setShowAlert(true);
+  };
+  
+  const showConfirmModal = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmAction(() => onConfirm);
+    setShowConfirm(true);
+  };
 
   useEffect(() => {
     loadData();
@@ -69,21 +97,21 @@ export default function FriendsScreen({ navigation }: Props) {
 
   const handleAddFriend = async () => {
     if (!friendEmail.trim()) {
-      Alert.alert('Error', 'Please enter a friend\'s email address');
+      showAlertModal('Error', 'Please enter a friend\'s email address');
       return;
     }
 
     try {
       setAddingFriend(true);
       await FriendsService.sendFriendRequest(friendEmail.trim());
-      Alert.alert('Success', 'Friend request sent successfully!');
+      showAlertModal('Success', 'Friend request sent successfully!', 'success');
       setFriendEmail('');
       setShowAddFriendModal(false);
       await loadData(); // Reload to show any new requests
     } catch (error) {
       console.error('Error adding friend:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to send friend request';
-      Alert.alert('Error', errorMessage);
+      showAlertModal('Error', errorMessage);
     } finally {
       setAddingFriend(false);
     }
@@ -92,49 +120,39 @@ export default function FriendsScreen({ navigation }: Props) {
   const handleAcceptRequest = async (requestId: string) => {
     try {
       await FriendsService.acceptFriendRequest(requestId);
-      Alert.alert('Success', 'Friend request accepted!');
+      showAlertModal('Success', 'Friend request accepted!', 'success');
       await loadData();
     } catch (error) {
       console.error('Error accepting friend request:', error);
-      Alert.alert('Error', 'Failed to accept friend request');
+      showAlertModal('Error', 'Failed to accept friend request');
     }
   };
 
   const handleDeclineRequest = async (requestId: string) => {
     try {
       await FriendsService.declineFriendRequest(requestId);
-      Alert.alert('Success', 'Friend request declined');
+      showAlertModal('Success', 'Friend request declined', 'success');
       await loadData();
     } catch (error) {
       console.error('Error declining friend request:', error);
-      Alert.alert('Error', 'Failed to decline friend request');
+      showAlertModal('Error', 'Failed to decline friend request');
     }
   };
 
   const handleRemoveFriend = async (friend: Friend) => {
-    Alert.alert(
+    showConfirmModal(
       'Remove Friend',
       `Are you sure you want to remove ${friend.friendName} from your friends list?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await FriendsService.removeFriend(friend.friendId);
-              Alert.alert('Success', 'Friend removed successfully');
-              await loadData();
-            } catch (error) {
-              console.error('Error removing friend:', error);
-              Alert.alert('Error', 'Failed to remove friend');
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          await FriendsService.removeFriend(friend.friendId);
+          showAlertModal('Success', 'Friend removed successfully', 'success');
+          await loadData();
+        } catch (error) {
+          console.error('Error removing friend:', error);
+          showAlertModal('Error', 'Failed to remove friend');
+        }
+      }
     );
   };
 
@@ -203,7 +221,12 @@ export default function FriendsScreen({ navigation }: Props) {
             friends.map((friend) => (
               <Card key={friend.id} style={styles.friendCard}>
                 <Layout style={styles.friendInfo}>
-                  <Text category="h6" style={styles.friendName}>{friend.friendName}</Text>
+                  <Layout style={styles.friendNameContainer}>
+                    <Text category="h6" style={styles.friendName}>{friend.friendName}</Text>
+                    {friend.friendCountry && getCountryFlag(friend.friendCountry) ? (
+                      <Text style={styles.countryFlag}>{getCountryFlag(friend.friendCountry)}</Text>
+                    ) : null}
+                  </Layout>
                   <Text category="s1" appearance="hint" style={styles.friendEmail}>{friend.friendEmail}</Text>
                 </Layout>
                 <Layout style={styles.friendActions}>
@@ -327,6 +350,30 @@ export default function FriendsScreen({ navigation }: Props) {
           </Layout>
         </Layout>
       </Modal>
+
+      <AlertModal
+        visible={showAlert}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setShowAlert(false)}
+      />
+
+      <ConfirmModal
+        visible={showConfirm}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmText="Confirm"
+        cancelText="Cancel"
+        confirmStatus="danger"
+        onConfirm={() => {
+          if (confirmAction) {
+            confirmAction();
+          }
+          setShowConfirm(false);
+        }}
+        onCancel={() => setShowConfirm(false)}
+      />
     </Layout>
   );
 }
@@ -394,8 +441,16 @@ const styles = StyleSheet.create({
     flex: 1,
     marginBottom: 12,
   },
-  friendName: {
+  friendNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 4,
+  },
+  friendName: {
+    marginRight: 8,
+  },
+  countryFlag: {
+    fontSize: 20,
   },
   friendEmail: {
     marginTop: 4,
