@@ -91,7 +91,17 @@ export class TradeService {
         ...doc.data()
       } as Trade));
 
-      return [...trades, ...trades2];
+      // Merge and sort by createdAt descending
+      const allTrades = [...trades, ...trades2];
+      return allTrades.sort((a, b) => {
+        const aDate = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 
+                      a.createdAt instanceof Date ? a.createdAt.getTime() : 
+                      typeof a.createdAt === 'number' ? a.createdAt : 0;
+        const bDate = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 
+                      b.createdAt instanceof Date ? b.createdAt.getTime() : 
+                      typeof b.createdAt === 'number' ? b.createdAt : 0;
+        return bDate - aDate; // Descending order (newest first)
+      });
     } catch (error) {
       console.error('Error fetching trades:', error);
       return [];
@@ -140,8 +150,8 @@ export class TradeService {
     }
   }
 
-  // Accept a trade
-  static async acceptTrade(tradeId: string): Promise<void> {
+  // Accept a trade (with optional partial card selection)
+  static async acceptTrade(tradeId: string, selectedCardIds?: string[]): Promise<void> {
     try {
       const trade = await this.getTrade(tradeId);
       if (!trade) throw new Error('Trade not found');
@@ -151,10 +161,25 @@ export class TradeService {
         throw new Error('Only the recipient can accept a trade');
       }
 
-      await updateDoc(doc(db, 'trades', tradeId), {
+      // If selectedCardIds is provided, filter the wants array to only include selected cards
+      // If no selectedCardIds provided, accept all cards (existing behavior)
+      let acceptedWants = trade.wants;
+      if (selectedCardIds && selectedCardIds.length > 0) {
+        acceptedWants = trade.wants.filter(item => selectedCardIds.includes(item.id));
+      }
+
+      const updateData: any = {
         status: 'accepted',
         updatedAt: serverTimestamp()
-      });
+      };
+
+      // If partial selection, update wants array with only selected cards
+      if (selectedCardIds && selectedCardIds.length > 0 && selectedCardIds.length < trade.wants.length) {
+        updateData.wants = acceptedWants;
+        updateData.selectedCards = selectedCardIds;
+      }
+
+      await updateDoc(doc(db, 'trades', tradeId), updateData);
 
       // Send notification to initiator
       try {
@@ -171,8 +196,8 @@ export class TradeService {
     }
   }
 
-  // Decline a trade
-  static async declineTrade(tradeId: string): Promise<void> {
+  // Decline a trade (with optional partial card selection for partial decline)
+  static async declineTrade(tradeId: string, selectedCardIds?: string[]): Promise<void> {
     try {
       const trade = await this.getTrade(tradeId);
       if (!trade) throw new Error('Trade not found');
@@ -182,10 +207,20 @@ export class TradeService {
         throw new Error('Only the recipient can decline a trade');
       }
 
-      await updateDoc(doc(db, 'trades', tradeId), {
+      // If selectedCardIds is provided, it means we're declining only selected cards
+      // But for now, declining means declining the entire trade
+      // If partial decline is needed in the future, we can implement it here
+      const updateData: any = {
         status: 'declined',
         updatedAt: serverTimestamp()
-      });
+      };
+
+      // Store selected cards if provided (for potential future use)
+      if (selectedCardIds && selectedCardIds.length > 0) {
+        updateData.selectedCards = selectedCardIds;
+      }
+
+      await updateDoc(doc(db, 'trades', tradeId), updateData);
 
       // Send notification to initiator
       try {

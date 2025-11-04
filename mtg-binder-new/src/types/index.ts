@@ -70,6 +70,7 @@ export interface Trade {
   status: 'pending' | 'accepted' | 'declined' | 'completed';
   wants: TradeItem[];
   offers: TradeItem[];
+  selectedCards?: string[]; // Array of TradeItem IDs that are selected for partial trades
   createdAt: Date;
   updatedAt: Date;
 }
