@@ -1,0 +1,35 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle (will be transparent in final) -->
+  <rect width="1024" height="1024" fill="transparent"/>
+  
+  <!-- Card binder representation -->
+  <!-- Main binder shape -->
+  <rect x="200" y="150" width="624" height="724" rx="20" fill="#1A1A1A" stroke="#FF8610" stroke-width="8"/>
+  
+  <!-- Binder rings -->
+  <circle cx="300" cy="200" r="25" fill="#FF8610"/>
+  <circle cx="300" cy="300" r="25" fill="#FF8610"/>
+  <circle cx="300" cy="400" r="25" fill="#FF8610"/>
+  <circle cx="300" cy="500" r="25" fill="#FF8610"/>
+  <circle cx="300" cy="600" r="25" fill="#FF8610"/>
+  <circle cx="300" cy="700" r="25" fill="#FF8610"/>
+  <circle cx="300" cy="800" r="25" fill="#FF8610"/>
+  
+  <!-- Card pages/sheets -->
+  <rect x="350" y="200" width="450" height="580" rx="8" fill="#2A2A2A" stroke="#FF8610" stroke-width="4" opacity="0.8"/>
+  
+  <!-- MTG card representation on page -->
+  <rect x="400" y="300" width="350" height="480" rx="12" fill="#1A1A1A" stroke="#FF8610" stroke-width="6"/>
+  
+  <!-- Card frame details -->
+  <rect x="420" y="320" width="310" height="40" fill="#FF8610" opacity="0.3"/>
+  <rect x="420" y="720" width="310" height="40" fill="#FF8610" opacity="0.3"/>
+  
+  <!-- Card symbol/icon in center -->
+  <circle cx="575" cy="540" r="60" fill="#FF8610" opacity="0.4"/>
+  <path d="M 575 480 L 595 540 L 555 540 Z" fill="#FF8610"/>
+  
+  <!-- Additional card peeking out -->
+  <rect x="500" y="250" width="300" height="420" rx="10" fill="#2A2A2A" stroke="#FF8610" stroke-width="3" opacity="0.6"/>
+</svg>
+
