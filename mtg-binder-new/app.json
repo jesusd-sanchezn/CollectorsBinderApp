@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "notification": {
       "icon": "./assets/icon.png",
       "color": "#FF8610",
@@ -38,8 +38,11 @@
     },
     "extra": {
       "eas": {
-        "projectId": "your-project-id-here"
+        "projectId": "89aad5ef-05dc-4df8-a9cf-4d79832a51cf"
       }
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
