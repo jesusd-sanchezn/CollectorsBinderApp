@@ -2,10 +2,6 @@ package com.mtgbinder.app
 
 import android.app.Application
 import android.content.res.Configuration
-import android.util.Log
-
-import com.facebook.FacebookSdk
-import com.facebook.appevents.AppEventsLogger
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
@@ -43,26 +39,6 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
-    if (!FacebookSdk.isInitialized()) {
-      val appId = runCatching { getString(R.string.facebook_app_id) }.getOrNull()
-      if (!appId.isNullOrBlank()) {
-        if (appId == "fb_placeholder_app_id") {
-          Log.w("MainApplication", "Using placeholder Facebook App ID; replace with production value before release.")
-        }
-        FacebookSdk.setApplicationId(appId)
-        val clientToken = runCatching { getString(R.string.facebook_client_token) }.getOrNull()
-        if (!clientToken.isNullOrBlank()) {
-          if (clientToken == "placeholder_client_token") {
-            Log.w("MainApplication", "Using placeholder Facebook Client Token; replace before release.")
-          }
-          FacebookSdk.setClientToken(clientToken)
-        }
-        FacebookSdk.sdkInitialize(applicationContext)
-        AppEventsLogger.activateApp(this)
-      } else {
-        Log.w("MainApplication", "Facebook App ID resource missing; skipping SDK initialization.")
-      }
-    }
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {
