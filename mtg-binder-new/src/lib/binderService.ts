@@ -30,6 +30,93 @@ export class BinderService {
     return user.uid;
   }
 
+  private static normalizeBinderData(binderId: string, data: any): Binder {
+    const pagesFromDb: any[] = Array.isArray(data.pages) ? data.pages : [];
+
+    const pages: BinderPage[] = pagesFromDb.map((page, pageIndex) => {
+      const slotsFromDb: any[] = Array.isArray(page?.slots) ? page.slots : [];
+      const pageNumber = page?.pageNumber ?? pageIndex + 1;
+
+      const slots: BinderSlot[] = Array.from({ length: 9 }).map((_, slotIndex) => {
+        const slot = slotsFromDb[slotIndex];
+        const hasCard = slot && slot.isEmpty === false && slot.card;
+
+        const slotData: BinderSlot = {
+          id: slot?.id || `${binderId}-${pageNumber}-${slotIndex}`,
+          position: slot?.position ?? slotIndex,
+          isEmpty: !hasCard,
+        };
+
+        if (hasCard) {
+          slotData.card = this.sanitizeCard(slot.card as Card);
+        }
+
+        return slotData;
+      });
+
+      return {
+        id: page?.id || `page-${pageNumber}`,
+        pageNumber,
+        slots,
+      };
+    });
+
+    const sanitizedPages = this.sanitizePages(pages);
+
+    if (sanitizedPages.length === 0) {
+      sanitizedPages.push({
+        id: 'page-1',
+        pageNumber: 1,
+        slots: Array.from({ length: 9 }).map((_, index) => ({
+          id: `slot-1-${index}`,
+          position: index,
+          isEmpty: true,
+        })),
+      });
+    }
+
+    return {
+      id: binderId,
+      ownerId: data.ownerId,
+      name: data.name || 'Binder',
+      description: data.description || '',
+      isPublic: !!data.isPublic,
+      backgroundImageUrl: data.backgroundImageUrl || undefined,
+      pages: sanitizedPages,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+    } as Binder;
+  }
+
+  private static sanitizeCard(card: Card): Card {
+    const sanitized: any = { ...card };
+    Object.keys(sanitized).forEach(key => {
+      if (sanitized[key] === undefined) {
+        delete sanitized[key];
+      }
+    });
+    return sanitized as Card;
+  }
+
+  private static sanitizePages(pages: BinderPage[]): BinderPage[] {
+    return pages.map(page => ({
+      ...page,
+      slots: page.slots.map(slot => {
+        const sanitizedSlot: BinderSlot = {
+          id: slot.id,
+          position: slot.position,
+          isEmpty: slot.isEmpty,
+        };
+
+        if (!slot.isEmpty && slot.card) {
+          sanitizedSlot.card = this.sanitizeCard(slot.card);
+        }
+
+        return sanitizedSlot;
+      }),
+    }));
+  }
+
   // Create a new binder
   static async createBinder(name: string, description?: string, isPublic: boolean = true): Promise<string> {
     try {
@@ -101,10 +188,7 @@ export class BinderService {
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
-        return {
-          id: docSnap.id,
-          ...docSnap.data()
-        } as Binder;
+        return this.normalizeBinderData(docSnap.id, docSnap.data());
       }
       return null;
     } catch (error) {
@@ -124,8 +208,9 @@ export class BinderService {
 
       const updatedPages = [...binder.pages, newPage];
       
+      const sanitizedPages = this.sanitizePages(updatedPages);
       await updateDoc(doc(db, 'binders', binderId), {
-        pages: updatedPages,
+        pages: sanitizedPages,
         updatedAt: serverTimestamp()
       });
     } catch (error) {
@@ -160,12 +245,14 @@ export class BinderService {
       updatedPages[pageIndex].slots[slotIndex] = {
         id: `${binderId}-${pageNumber}-${slotPosition}`,
         position: slotPosition,
-        card,
+        card: this.sanitizeCard(card),
         isEmpty: false
-      };
+      } as BinderSlot;
+
+      const sanitizedPages = this.sanitizePages(updatedPages);
 
       await updateDoc(doc(db, 'binders', binderId), {
-        pages: updatedPages,
+        pages: sanitizedPages,
         updatedAt: serverTimestamp()
       });
     } catch (error) {
@@ -203,8 +290,10 @@ export class BinderService {
         isEmpty: true
       };
 
+      const sanitizedPages = this.sanitizePages(updatedPages);
+
       await updateDoc(doc(db, 'binders', binderId), {
-        pages: updatedPages,
+        pages: sanitizedPages,
         updatedAt: serverTimestamp()
       });
     } catch (error) {
@@ -252,7 +341,7 @@ export class BinderService {
             slots.push({
               id: `${binderId}-${pageNum}-${slotNum}`,
               position: slotNum,
-              card: allCards[cardIndex].card,
+              card: this.sanitizeCard(allCards[cardIndex].card),
               isEmpty: false
             });
           } else {
@@ -272,9 +361,11 @@ export class BinderService {
         });
       }
 
+      const sanitizedPages = this.sanitizePages(newPages);
+
       // Update the binder with rearranged pages
       await updateDoc(doc(db, 'binders', binderId), {
-        pages: newPages,
+        pages: sanitizedPages,
         updatedAt: serverTimestamp()
       });
     } catch (error) {

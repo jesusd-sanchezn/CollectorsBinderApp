@@ -44,7 +44,12 @@ allow read, write: if isSignedIn();
   // Friendships collection
   match /friendships/{friendshipId} {
     allow read: if isSignedIn();
-    allow create, update, delete: if isSignedIn() && 
+    allow create: if isSignedIn() &&
+      (request.auth.uid == request.resource.data.userId || request.auth.uid == request.resource.data.friendId);
+    allow update: if isSignedIn() &&
+      (request.auth.uid == resource.data.userId || request.auth.uid == resource.data.friendId) &&
+      (request.resource.data.userId == resource.data.userId && request.resource.data.friendId == resource.data.friendId);
+    allow delete: if isSignedIn() &&
       (request.auth.uid == resource.data.userId || request.auth.uid == resource.data.friendId);
   }
 
@@ -52,7 +57,10 @@ allow read, write: if isSignedIn();
     match /friendRequests/{requestId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.fromUserId;
-      allow update: if isSignedIn() && request.auth.uid == resource.data.toUserId;
+      allow update: if isSignedIn() &&
+        request.auth.uid == resource.data.toUserId &&
+        request.resource.data.fromUserId == resource.data.fromUserId &&
+        request.resource.data.toUserId == resource.data.toUserId;
       allow delete: if isSignedIn();
     }
 

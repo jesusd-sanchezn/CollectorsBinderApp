@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { StyleSheet, ScrollView, useWindowDimensions, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Card } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -7,6 +7,7 @@ import { RootStackParamList } from '../types';
 import { useAuthStore } from '../state/useAuthStore';
 import ConfirmModal from '../components/ConfirmModal';
 import AlertModal from '../components/AlertModal';
+import { ScreenContainer } from '../components/ScreenContainer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -16,6 +17,21 @@ export default function HomeScreen({ navigation }: Props) {
   const [showAlert, setShowAlert] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
+  const { width } = useWindowDimensions();
+
+  const layoutStyles = useMemo(
+    () => ({
+      header: [
+        styles.header,
+        width < 480 && styles.headerStacked,
+      ],
+      headerButtons: [
+        styles.headerButtons,
+        width < 480 && styles.headerButtonsStacked,
+      ],
+    }),
+    [width]
+  );
 
   const handleSignOut = async () => {
     setShowSignOutConfirm(true);
@@ -39,17 +55,21 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   return (
-    <Layout style={styles.container}>
-      <ScrollView>
-        <Layout style={styles.content}>
-          <Layout style={styles.header} level="2">
+    <ScreenContainer>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+      >
+        <Layout style={styles.content} level="1">
+          <Layout style={layoutStyles.header} level="2">
             <Layout style={styles.headerTextContainer}>
               <Text category="h2" style={styles.welcome}>Welcome to MTG Binder!</Text>
               <Text category="s1" status="primary" style={styles.userEmail}>{user?.email}</Text>
             </Layout>
-            <Layout style={styles.headerButtons}>
-              <Button 
-                status="info" 
+            <Layout style={layoutStyles.headerButtons}>
+              <Button
+                status="info"
                 size="small"
                 onPress={() => navigation.navigate('Profile')}
                 style={styles.profileButton}
@@ -57,8 +77,8 @@ export default function HomeScreen({ navigation }: Props) {
               >
                 Profile
               </Button>
-              <Button 
-                status="danger" 
+              <Button
+                status="danger"
                 size="small"
                 onPress={handleSignOut}
                 style={styles.signOutButton}
@@ -68,7 +88,7 @@ export default function HomeScreen({ navigation }: Props) {
             </Layout>
           </Layout>
           
-          <Text category="s1" appearance="hint" style={styles.description} center>
+          <Text category="s1" appearance="hint" style={styles.description}>
             Your digital Magic: The Gathering collection manager
           </Text>
           
@@ -109,28 +129,28 @@ export default function HomeScreen({ navigation }: Props) {
           
           <Card style={styles.featuresContainer}>
             <Text category="h5" style={styles.featuresTitle} center>Features</Text>
-            <Layout style={styles.featureItem}>
+            <Layout style={styles.featureItem} level="1">
               <Feather name="smartphone" size={32} color="#FF8610" />
               <Text category="s1" style={styles.featureText}>
                 Digital binders with 9-pocket pages
               </Text>
             </Layout>
-            <Layout style={styles.featureItem}>
+            <Layout style={styles.featureItem} level="1">
               <Feather name="search" size={32} color="#FF8610" />
               <Text category="s1" style={styles.featureText}>Real-time card pricing</Text>
             </Layout>
-            <Layout style={styles.featureItem}>
+            <Layout style={styles.featureItem} level="1">
               <Feather name="users" size={32} color="#FF8610" />
               <Text category="s1" style={styles.featureText}>Share collections with friends</Text>
             </Layout>
-            <Layout style={styles.featureItem}>
+            <Layout style={styles.featureItem} level="1">
               <Feather name="refresh-cw" size={32} color="#FF8610" />
               <Text category="s1" style={styles.featureText}>Digital trade negotiations</Text>
             </Layout>
           </Card>
         </Layout>
       </ScrollView>
-      
+
       <ConfirmModal
         visible={showSignOutConfirm}
         title="Sign Out"
@@ -149,16 +169,19 @@ export default function HomeScreen({ navigation }: Props) {
         type="danger"
         onClose={() => setShowAlert(false)}
       />
-    </Layout>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  scrollContent: {
+    paddingBottom: 24,
   },
   content: {
-    padding: 20,
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    gap: 16,
   },
   header: {
     flexDirection: 'row',
@@ -168,6 +191,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
     borderRadius: 8,
+    gap: 12,
+  },
+  headerStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
   },
   headerTextContainer: {
     flex: 1,
@@ -183,25 +211,33 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-end',
     marginLeft: 10,
+    gap: 8,
+  },
+  headerButtonsStacked: {
+    width: '100%',
+    alignItems: 'stretch',
   },
   profileButton: {
-    width: 100,
-    marginBottom: 8,
+    minWidth: 140,
   },
   signOutButton: {
-    width: 100,
+    minWidth: 140,
   },
   description: {
-    marginBottom: 30,
+    textAlign: 'center',
+    marginBottom: 8,
   },
   menuContainer: {
-    marginBottom: 30,
+    marginBottom: 12,
+    gap: 12,
   },
   menuItemButton: {
-    marginBottom: 15,
+    marginBottom: 0,
   },
   featuresContainer: {
     padding: 20,
+    marginBottom: 12,
+    borderRadius: 12,
   },
   featuresTitle: {
     marginBottom: 15,
@@ -210,6 +246,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    gap: 12,
   },
   featureIcon: {
     marginRight: 12,

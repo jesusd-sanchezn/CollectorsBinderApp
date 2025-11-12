@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
   Modal,
-  Dimensions,
   Image,
   View
 } from 'react-native';
@@ -19,11 +18,13 @@ import { TradeService } from '../lib/tradeService';
 import { NotificationService } from '../lib/notificationService';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { CardImageService } from '../lib/cardImageService';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { ScreenContainer } from '../components/ScreenContainer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BinderView'>;
-
-const { width } = Dimensions.get('window');
-const CARD_SIZE = (width - 60) / 3; // 3 cards per row with margins
 
 export default function BinderViewScreen({ route }: Props) {
   const { binderId, ownerId, ownerName } = route.params;
@@ -37,12 +38,23 @@ export default function BinderViewScreen({ route }: Props) {
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [selectedCardSlot, setSelectedCardSlot] = useState<{pageNumber: number, slotPosition: number} | null>(null);
+  const [slotToFill, setSlotToFill] = useState<{pageNumber: number; slotPosition: number} | null>(null);
   
   // Trade selection state (only when viewing friend's binder)
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedCardsForTrade, setSelectedCardsForTrade] = useState<Map<string, {card: Card, pageNumber: number, slotPosition: number}>>(new Map());
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [creatingTrade, setCreatingTrade] = useState(false);
+
+  // Manual add card state
+  const [showAddCardModal, setShowAddCardModal] = useState(false);
+  const [cardSearchTerm, setCardSearchTerm] = useState('');
+  const [cardSearchLoading, setCardSearchLoading] = useState(false);
+  const [cardSearchResult, setCardSearchResult] = useState<Card | null>(null);
+  const [cardSearchMessage, setCardSearchMessage] = useState<string | null>(null);
+  const [cardSearchMessageType, setCardSearchMessageType] = useState<'info' | 'danger'>('info');
+  const [addingCard, setAddingCard] = useState(false);
+  const longPressActiveRef = useRef(false);
   
   // Alert and Confirm modal state
   const [showAlert, setShowAlert] = useState(false);
@@ -74,29 +86,12 @@ export default function BinderViewScreen({ route }: Props) {
       if (binder) {
         setBinder(binder);
       } else {
-        // Create empty binder if not found
-        const emptyBinder: Binder = {
-          id: binderId,
-          ownerId,
-          name: `${ownerName}'s Binder`,
-          description: 'A digital MTG collection',
-          isPublic: true,
-          pages: [
-            {
-              id: 'page-1',
-              pageNumber: 1,
-              slots: Array.from({ length: 9 }, (_, i) => ({
-                id: `slot-1-${i}`,
-                position: i,
-                isEmpty: true
-              }))
-            }
-          ],
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        setBinder(emptyBinder);
-        // Note: We're not saving this to Firebase yet - it will be saved when user adds content
+        showAlertModal(
+          'Binder Unavailable',
+          'This binder could not be found. It may be private or has been removed.',
+          'warning'
+        );
+        setBinder(null);
       }
     } catch (error) {
       console.error('Error loading binder:', error);
@@ -211,6 +206,30 @@ export default function BinderViewScreen({ route }: Props) {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const templateContent = 'QuantityX,Name,Foil,Edition (name),Condition\n';
+      const fileUri = `${FileSystem.cacheDirectory}mtg-binder-import-template.csv`;
+      await FileSystem.writeAsStringAsync(fileUri, templateContent);
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Share CSV Template',
+        });
+      } else {
+        showAlertModal(
+          'Template Ready',
+          'CSV template saved to your device cache directory. Share or copy it manually.',
+          'success'
+        );
+      }
+    } catch (error) {
+      console.error('Error exporting CSV template:', error);
+      showAlertModal('Error', 'Failed to create CSV template. Please try again.');
+    }
+  };
+
   const addPage = async () => {
     try {
       await BinderService.addPageToBinder(binderId);
@@ -221,17 +240,189 @@ export default function BinderViewScreen({ route }: Props) {
     }
   };
 
+  const resetAddCardForm = () => {
+    setCardSearchTerm('');
+    setCardSearchResult(null);
+    setCardSearchMessage(null);
+    setCardSearchMessageType('info');
+    setCardSearchLoading(false);
+  };
+
+  const extractImageUrl = (card: any): string => {
+    if (card.image_uris?.normal) {
+      return card.image_uris.normal;
+    }
+    if (card.image_uris?.large) {
+      return card.image_uris.large;
+    }
+    if (card.card_faces?.[0]?.image_uris?.normal) {
+      return card.card_faces[0].image_uris.normal;
+    }
+    return '';
+  };
+
+  const mapScryfallCardToAppCard = (card: any): Card => {
+    const rawPrice = card.prices?.usd ?? card.prices?.usd_foil ?? '';
+    const parsedPrice = parseFloat(rawPrice);
+
+    const baseCard: Card = {
+      id: card.id || `scryfall-${Date.now()}`,
+      name: card.name,
+      set: card.set_name || 'Unknown Set',
+      setCode: card.set ? (card.set as string).toUpperCase() : 'CUSTOM',
+      collectorNumber: card.collector_number || 'N/A',
+      imageUrl: extractImageUrl(card),
+      rarity: card.rarity || 'unknown',
+      condition: 'NM',
+      finish: 'nonfoil',
+      quantity: 1,
+    };
+
+    if (Number.isFinite(parsedPrice)) {
+      baseCard.price = parsedPrice;
+    }
+
+    return baseCard;
+  };
+
+
+  const sanitizeCardForFirestore = (card: Card): Card => {
+    const sanitized: any = { ...card };
+    Object.keys(sanitized).forEach(key => {
+      if (sanitized[key] === undefined) {
+        delete sanitized[key];
+      }
+    });
+    return sanitized as Card;
+  };
+  const fetchCardFromScryfall = async (query: string): Promise<Card | null> => {
+    try {
+      const response = await fetch(`https://api.scryfall.com/cards/named?${query}`);
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      return mapScryfallCardToAppCard(data);
+    } catch (error) {
+      console.error('Error contacting Scryfall:', error);
+      return null;
+    }
+  };
+
+  const searchCardOnScryfall = async (term: string): Promise<Card | null> => {
+    const encoded = encodeURIComponent(term);
+    const exact = await fetchCardFromScryfall(`exact=${encoded}`);
+    if (exact) {
+      return exact;
+    }
+    return fetchCardFromScryfall(`fuzzy=${encoded}`);
+  };
+
+  const handleStartAddCard = (pageNumber: number, slotPosition: number) => {
+    if (!isOwner) {
+      return;
+    }
+    resetAddCardForm();
+    setSlotToFill({ pageNumber, slotPosition });
+    setShowAddCardModal(true);
+  };
+
+  const handleCloseAddCardModal = () => {
+    resetAddCardForm();
+    setShowAddCardModal(false);
+    setSlotToFill(null);
+  };
+
+  const handleSearchForCard = async () => {
+    const term = cardSearchTerm.trim();
+    if (!term) {
+      setCardSearchMessageType('danger');
+      setCardSearchMessage('Enter a card name to search.');
+      setCardSearchResult(null);
+      return;
+    }
+
+    setCardSearchLoading(true);
+    setCardSearchMessage(null);
+    setCardSearchResult(null);
+
+    try {
+      const result = await searchCardOnScryfall(term);
+      if (result) {
+        setCardSearchResult(result);
+        setCardSearchMessageType('info');
+        setCardSearchMessage(`${result.name} (${result.set})`);
+      } else {
+        setCardSearchMessageType('danger');
+        setCardSearchMessage('No card found. Try a different name or spelling.');
+      }
+    } catch (error) {
+      console.error('Error searching for card:', error);
+      setCardSearchMessageType('danger');
+      setCardSearchMessage('Unable to search right now. Please try again.');
+    } finally {
+      setCardSearchLoading(false);
+    }
+  };
+
+  const handleAddCardToSlot = async () => {
+    if (!slotToFill || !cardSearchResult) {
+      setCardSearchMessageType('danger');
+      setCardSearchMessage('Search for a card before adding it to the binder.');
+      return;
+    }
+
+    setAddingCard(true);
+
+    try {
+      const rawCard: Card = {
+        ...cardSearchResult,
+        id: `${cardSearchResult.id}-${Date.now()}`,
+        quantity: 1,
+      };
+
+      const cardToSave = sanitizeCardForFirestore(rawCard);
+
+      await BinderService.addCardToSlot(
+        binderId,
+        slotToFill.pageNumber,
+        slotToFill.slotPosition,
+        cardToSave
+      );
+
+      await loadBinder();
+      showAlertModal('Success', `"${cardToSave.name}" has been added to your binder.`, 'success');
+      handleCloseAddCardModal();
+    } catch (error) {
+      console.error('Error adding searched card:', error);
+      showAlertModal('Error', 'Failed to add this card. Please try again.');
+    } finally {
+      setAddingCard(false);
+    }
+  };
+  const openCardDetails = (card: Card, pageNumber: number, slotPosition: number) => {
+    setSelectedCard(card);
+    setSelectedCardSlot({ pageNumber, slotPosition });
+    setShowCardModal(true);
+  };
+
   const handleCardPress = (card: Card, pageNumber: number, slotPosition: number) => {
-    // In selection mode, toggle card selection instead of opening modal
+    if (longPressActiveRef.current) {
+      longPressActiveRef.current = false;
+      return;
+    }
+
     if (selectionMode && !isOwner) {
       toggleCardSelection(card, pageNumber, slotPosition);
       return;
     }
-    
-    // Normal behavior: open card modal
-    setSelectedCard(card);
-    setSelectedCardSlot({ pageNumber, slotPosition });
-    setShowCardModal(true);
+
+    openCardDetails(card, pageNumber, slotPosition);
+  };
+
+  const handleCardLongPress = (card: Card, pageNumber: number, slotPosition: number) => {
+    longPressActiveRef.current = true;
+    openCardDetails(card, pageNumber, slotPosition);
   };
 
   // Toggle selection mode (for viewing friend's binders)
@@ -408,8 +599,15 @@ export default function BinderViewScreen({ route }: Props) {
   const renderCardSlot = (slot: BinderSlot, pageNumber: number) => {
     if (slot.isEmpty) {
       return (
-        <TouchableOpacity style={styles.emptySlot}>
-          <Text style={styles.emptySlotText}>+</Text>
+        <TouchableOpacity
+          style={[styles.emptySlot, !isOwner && styles.emptySlotDisabled]}
+          activeOpacity={isOwner ? 0.85 : 1}
+          onPress={() => isOwner && handleStartAddCard(pageNumber, slot.position)}
+        >
+          <Feather name="plus" size={26} color={isOwner ? '#FF8610' : '#555'} />
+          <Text style={styles.emptySlotText}>
+            {isOwner ? 'Add card' : 'Empty'}
+          </Text>
         </TouchableOpacity>
       );
     }
@@ -424,7 +622,12 @@ export default function BinderViewScreen({ route }: Props) {
           showSelectionUI && styles.cardSlotSelectionMode,
           isSelected && styles.cardSlotSelected
         ]}
+        onPressIn={() => {
+          longPressActiveRef.current = false;
+        }}
         onPress={() => handleCardPress(slot.card!, pageNumber, slot.position)}
+        onLongPress={() => handleCardLongPress(slot.card!, pageNumber, slot.position)}
+        activeOpacity={0.9}
       >
         {/* Selection Checkbox Overlay */}
         {showSelectionUI && (
@@ -433,20 +636,13 @@ export default function BinderViewScreen({ route }: Props) {
           </View>
         )}
         {/* Card Name at Top */}
-        <View style={styles.cardNameContainer}>
-          <Text style={styles.cardNameText} numberOfLines={2}>
-            {slot.card?.name}
-          </Text>
-        </View>
-
         <View style={styles.cardImageContainer}>
           {slot.card?.imageUrl ? (
             <Image 
               source={{ uri: slot.card.imageUrl }} 
               style={styles.cardImage}
-              resizeMode="none"
+              resizeMode="cover"
               onError={() => {
-                // Image failed to load, will show placeholder
                 console.log('Image failed to load:', slot.card?.imageUrl);
               }}
             />
@@ -455,24 +651,6 @@ export default function BinderViewScreen({ route }: Props) {
               <Text style={styles.cardSet}>{slot.card?.setCode}</Text>
             </View>
           )}
-
-          {/* Card Info Labels */}
-          <View style={styles.cardInfoContainer}>
-            <View style={styles.cardInfoRow}>
-              <Text style={styles.cardInfoLabel}>Condition:</Text>
-              <Text style={styles.cardInfoValue}>{slot.card?.condition}</Text>
-            </View>
-            <View style={styles.cardInfoRow}>
-              <Text style={styles.cardInfoLabel}>Finish:</Text>
-              <Text style={styles.cardInfoValue}>{slot.card?.finish}</Text>
-            </View>
-            {slot.card?.price && (
-              <View style={styles.cardInfoRow}>
-                <Text style={styles.cardInfoLabel}>Price:</Text>
-                <Text style={styles.cardPrice}>${slot.card.price}</Text>
-              </View>
-            )}
-          </View>
         </View>
       </TouchableOpacity>
     );
@@ -518,102 +696,104 @@ export default function BinderViewScreen({ route }: Props) {
   }
 
   return (
-    <Layout style={styles.container}>
-      <Layout style={styles.header} level="2">
-        {/* Title Row */}
-        <Layout style={styles.headerTitleRow}>
-          <Text category="h5" style={styles.title}>{binder.name}</Text>
-        </Layout>
-        
-        {/* Action Buttons Row */}
-        {isOwner && (
-          <Layout style={styles.headerActions}>
-            <Button 
-              status="primary"
-              size="small"
-              style={styles.actionButton}
-              onPress={() => setShowImportModal(true)}
-              accessoryLeft={() => <Feather name="download" size={16} color="#FFFFFF" />}
-            >
-              Import
-            </Button>
-            <Button 
-              status="primary"
-              size="small"
-              style={styles.actionButton}
-              onPress={addPage}
-              accessoryLeft={() => <Feather name="file-plus" size={16} color="#FFFFFF" />}
-            >
-              Add Page
-            </Button>
-            <Button 
-              status="primary"
-              size="small"
-              style={styles.actionButton}
-              onPress={handleRearrangeCards}
-              accessoryLeft={() => <Feather name="refresh-cw" size={16} color="#FFFFFF" />}
-            >
-              Rearrange
-            </Button>
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={styles.screenContent}>
+        <Layout style={styles.header} level="2">
+          {/* Title Row */}
+          <Layout style={styles.headerTitleRow}>
+            <Text category="h5" style={styles.title}>{binder.name}</Text>
           </Layout>
-        )}
-        {!isOwner && (
-          <Layout style={styles.headerActions}>
-            <Button 
-              status={selectionMode ? "danger" : "primary"}
-              size="small"
-              style={styles.actionButton}
-              onPress={toggleSelectionMode}
-              accessoryLeft={() => <Feather name={selectionMode ? "x" : "check-square"} size={16} color="#FFFFFF" />}
-            >
-              {selectionMode ? 'Cancel' : 'Select Cards'}
-            </Button>
-            {selectionMode && selectedCardsForTrade.size > 0 && (
+          
+          {/* Action Buttons Row */}
+          {isOwner && (
+            <Layout style={styles.headerActions}>
               <Button 
-                status="info"
+                status="primary"
                 size="small"
                 style={styles.actionButton}
-                onPress={() => setShowConfirmModal(true)}
-                accessoryLeft={() => <Feather name="clipboard" size={16} color="#FFFFFF" />}
+                onPress={() => setShowImportModal(true)}
+                accessoryLeft={() => <Feather name="download" size={16} color="#FFFFFF" />}
               >
-                Review ({selectedCardsForTrade.size})
+                Import
               </Button>
-            )}
+              <Button 
+                status="primary"
+                size="small"
+                style={styles.actionButton}
+                onPress={addPage}
+                accessoryLeft={() => <Feather name="file-plus" size={16} color="#FFFFFF" />}
+              >
+                Add Page
+              </Button>
+              <Button 
+                status="primary"
+                size="small"
+                style={styles.actionButton}
+                onPress={handleRearrangeCards}
+                accessoryLeft={() => <Feather name="refresh-cw" size={16} color="#FFFFFF" />}
+              >
+                Rearrange
+              </Button>
+            </Layout>
+          )}
+          {!isOwner && (
+            <Layout style={styles.headerActions}>
+              <Button 
+                status={selectionMode ? "danger" : "primary"}
+                size="small"
+                style={styles.actionButton}
+                onPress={toggleSelectionMode}
+                accessoryLeft={() => <Feather name={selectionMode ? "x" : "check-square"} size={16} color="#FFFFFF" />}
+              >
+                {selectionMode ? 'Cancel' : 'Select Cards'}
+              </Button>
+              {selectionMode && selectedCardsForTrade.size > 0 && (
+                <Button 
+                  status="info"
+                  size="small"
+                  style={styles.actionButton}
+                  onPress={() => setShowConfirmModal(true)}
+                  accessoryLeft={() => <Feather name="clipboard" size={16} color="#FFFFFF" />}
+                >
+                  Review ({selectedCardsForTrade.size})
+                </Button>
+              )}
+            </Layout>
+          )}
+        </Layout>
+
+        <Layout style={styles.binderContent}>
+          {/* Current Page Display */}
+          <Layout style={styles.currentPageContainer}>
+            {renderPage(binder.pages[currentPage])}
           </Layout>
-        )}
-      </Layout>
 
-      <Layout style={styles.binderContent}>
-        {/* Current Page Display */}
-        <Layout style={styles.currentPageContainer}>
-          {renderPage(binder.pages[currentPage])}
+          {/* Page Navigation */}
+          <Layout style={styles.pageNavigation} level="2">
+            <Button 
+              status="primary"
+              size="small"
+              disabled={currentPage === 0}
+              onPress={() => setCurrentPage(Math.max(0, currentPage - 1))}
+            >
+              ← Previous
+            </Button>
+            
+            <Text category="s1" style={styles.pageIndicator}>
+              Page {currentPage + 1} of {binder.pages.length}
+            </Text>
+            
+            <Button 
+              status="primary"
+              size="small"
+              disabled={currentPage >= binder.pages.length - 1}
+              onPress={() => setCurrentPage(Math.min(binder.pages.length - 1, currentPage + 1))}
+            >
+              Next →
+            </Button>
+          </Layout>
         </Layout>
-
-        {/* Page Navigation */}
-        <Layout style={styles.pageNavigation} level="2">
-          <Button 
-            status="primary"
-            size="small"
-            disabled={currentPage === 0}
-            onPress={() => setCurrentPage(Math.max(0, currentPage - 1))}
-          >
-            ← Previous
-          </Button>
-          
-          <Text category="s1" style={styles.pageIndicator}>
-            Page {currentPage + 1} of {binder.pages.length}
-          </Text>
-          
-          <Button 
-            status="primary"
-            size="small"
-            disabled={currentPage >= binder.pages.length - 1}
-            onPress={() => setCurrentPage(Math.min(binder.pages.length - 1, currentPage + 1))}
-          >
-            Next →
-          </Button>
-        </Layout>
-      </Layout>
+      </ScrollView>
 
       {/* CSV Import Modal */}
       <Modal
@@ -643,7 +823,6 @@ export default function BinderViewScreen({ route }: Props) {
             </Button>
           </Layout>
 
-          {/* Loading Overlay */}
           {importing && (
             <Layout style={styles.loadingOverlay}>
               <Layout style={styles.loadingContent}>
@@ -666,7 +845,17 @@ export default function BinderViewScreen({ route }: Props) {
               • Condition (optional, defaults to NM){'\n'}
               • Finish (optional, defaults to nonfoil)
             </Text>
-            
+
+            <Button
+              appearance="outline"
+              status="info"
+              onPress={handleDownloadTemplate}
+              style={styles.templateButton}
+              accessoryLeft={() => <Feather name="download-cloud" size={16} color="#FF8610" />}
+            >
+              Download CSV Template
+            </Button>
+
             <Layout style={styles.sampleBox} level="3">
               <Text category="s1" style={styles.sampleTitle}>📝 Sample CSV Format:</Text>
               <Text category="s1" appearance="hint" style={styles.sampleText}>
@@ -699,67 +888,94 @@ export default function BinderViewScreen({ route }: Props) {
         </Layout>
       </Modal>
 
-      {/* Trade Confirmation Modal */}
+      {/* Manual Add Card Modal */}
       <Modal
-        visible={showConfirmModal}
+        visible={showAddCardModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowConfirmModal(false)}
+        onRequestClose={handleCloseAddCardModal}
       >
-        <Layout style={styles.modalContainer}>
-          <Layout style={styles.modalHeader} level="2">
-            <Button
-              appearance="ghost"
-              status="basic"
-              size="small"
-              onPress={() => setShowConfirmModal(false)}
-            >
-              Cancel
-            </Button>
-            <Text category="h6" style={styles.modalTitle}>Review Trade Selection</Text>
-            <Layout style={{ width: 60 }} />
-          </Layout>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <Layout style={styles.modalContainer} level="1">
+            <Layout style={styles.modalHeader} level="2">
+        <Button
+          appearance="ghost"
+          status="basic"
+          size="small"
+          onPress={handleCloseAddCardModal}
+        >
+          Cancel
+        </Button>
+        <Text category="h6" style={styles.modalTitle}>Add Card to Slot</Text>
+        <Layout style={{ width: 60 }} />
+      </Layout>
 
-          <ScrollView style={styles.modalContent}>
-            <Text category="s1" appearance="hint" style={styles.confirmInstructions}>
-              You are requesting {selectedCardsForTrade.size} card{selectedCardsForTrade.size === 1 ? '' : 's'} from {ownerName}'s binder.
-              A notification will be sent once you confirm.
-            </Text>
-
-            <Text category="h6" style={styles.confirmSubtitle}>Selected Cards:</Text>
-            
-            {Array.from(selectedCardsForTrade.values()).map((item, index) => (
-              <Layout key={index} style={styles.selectedCardItem} level="3">
-                <Image 
-                  source={{ uri: item.card.imageUrl }} 
-                  style={styles.selectedCardImage}
-                  resizeMode="contain"
-                />
-                <Layout style={styles.selectedCardInfo}>
-                  <Text category="s1" style={styles.selectedCardName}>{item.card.name}</Text>
-                  <Text category="s1" appearance="hint" style={styles.selectedCardSet}>{item.card.set} ({item.card.setCode})</Text>
-                  <Text category="c1" appearance="hint" style={styles.selectedCardCondition}>
-                    {item.card.condition} • {item.card.finish}
-                    {item.card.price && ` • $${item.card.price}`}
-                  </Text>
-                </Layout>
-              </Layout>
-            ))}
-
-            <Layout style={styles.confirmFooter}>
-              <Button 
-                status="primary"
-                size="large"
-                style={styles.confirmButton}
-                onPress={handleConfirmTrade}
-                disabled={creatingTrade}
-                accessoryLeft={creatingTrade ? () => <Spinner size="small" status="control" /> : () => <Feather name="check" size={16} color="#FFFFFF" />}
-              >
-                {creatingTrade ? 'Creating Trade...' : 'Confirm Trade Request'}
-              </Button>
-            </Layout>
-          </ScrollView>
+      <ScrollView
+        contentContainerStyle={styles.addCardContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Text category="s1" style={styles.inputLabel}>Search for a Card</Text>
+        <Input
+          style={styles.textInput}
+          value={cardSearchTerm}
+          onChangeText={setCardSearchTerm}
+          placeholder="e.g., Lightning Bolt"
+          autoCapitalize="words"
+          autoCorrect={false}
+        />
+        <Layout style={styles.searchActions} level="1">
+          <Button
+            status="primary"
+            onPress={handleSearchForCard}
+            disabled={cardSearchLoading}
+            accessoryLeft={cardSearchLoading ? () => <Spinner size="small" status="control" /> : undefined}
+          >
+            {cardSearchLoading ? 'Searching...' : 'Search'}
+          </Button>
         </Layout>
+        {cardSearchMessage ? (
+          <Text
+            category="s1"
+            status={cardSearchMessageType === 'danger' ? 'danger' : 'info'}
+            style={styles.searchStatusText}
+          >
+            {cardSearchMessage}
+          </Text>
+        ) : null}
+        {cardSearchResult && (
+          <Layout style={styles.searchResultCard} level="2">
+            <Image
+              source={{ uri: cardSearchResult.imageUrl }}
+              style={styles.searchResultImage}
+              resizeMode="contain"
+            />
+            <Layout style={styles.searchResultInfo}>
+              <Text category="h6" style={styles.searchResultTitle}>{cardSearchResult.name}</Text>
+              <Text category="s1" appearance="hint" style={styles.searchResultSubtitle}>
+                {cardSearchResult.set} ({cardSearchResult.setCode})
+              </Text>
+              {cardSearchResult.price ? (
+                <Text category="s1" style={styles.searchResultPrice}>
+                  ${cardSearchResult.price.toFixed(2)}
+                </Text>
+              ) : null}
+            </Layout>
+            <Button
+              status="success"
+              size="small"
+              style={styles.searchResultButton}
+              onPress={handleAddCardToSlot}
+              disabled={addingCard}
+              accessoryLeft={addingCard ? () => <Spinner size="small" status="control" /> : undefined}
+            >
+              {addingCard ? 'Adding...' : 'Add Card'}
+            </Button>
+          </Layout>
+        )}
+      </ScrollView>
+          </Layout>
+        </SafeAreaView>
       </Modal>
 
       {/* Card Detail Modal */}
@@ -875,14 +1091,11 @@ export default function BinderViewScreen({ route }: Props) {
         onConfirm={confirmRearrangeCards}
         onCancel={() => setShowRearrangeConfirm(false)}
       />
-    </Layout>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -900,13 +1113,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   header: {
-    flexDirection: 'column',
+    gap: 12,
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    marginBottom: 16,
   },
   headerTitleRow: {
-    marginBottom: 10,
+    marginBottom: 4,
   },
   title: {
     fontSize: 20,
@@ -914,11 +1128,12 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 12,
   },
   actionButton: {
-    flex: 1,
-    marginHorizontal: 2,
+    flexGrow: 1,
+    minWidth: '28%',
   },
   actionButtonText: {
     color: '#fff',
@@ -926,9 +1141,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   binderContent: {
-    flex: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 40,
+    gap: 20,
   },
   pageNavigation: {
     flexDirection: 'row',
@@ -963,8 +1178,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   currentPageContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    width: '100%',
     alignItems: 'center',
   },
   pageGrid: {
@@ -972,106 +1186,66 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     width: '100%',
-    minHeight: 680, // Increased height to accommodate taller cards (3 rows × 240px + gaps)
+    marginTop: 12,
   },
   slotContainer: {
-    width: '30%', // 3 columns with proper spacing
-    height: 220, // Much more height to show full card image
-    marginBottom: 10, // Gap between rows
+    width: '31%',
+    aspectRatio: 63 / 88,
+    marginBottom: 16,
   },
   cardSlot: {
     flex: 1,
+    flexDirection: 'column',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#333',
-    padding: 2, // Slightly more padding for bigger pockets
-    overflow: 'hidden',
+    padding: 4,
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   emptySlot: {
     flex: 1,
-    backgroundColor: '#333',
-    borderRadius: 8,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#555',
+    borderColor: '#3a3a3a',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 6,
   },
   emptySlotText: {
-    color: '#888',
-    fontSize: 20,
-    fontWeight: 'bold',
+    color: '#999',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  cardNameContainer: {
-    height: 10, // Smaller height for card name to give more space to image
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 1,
-  },
-  cardNameText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    lineHeight: 12,
+  emptySlotDisabled: {
+    opacity: 0.6,
   },
   cardImageContainer: {
     flex: 1,
-    position: 'relative',
+    flexGrow: 1,
+    width: '100%',
   },
   cardImage: {
+    flex: 1,
     width: '100%',
-    height: '100%', // Take full height of container
     borderRadius: 8,
+    resizeMode: 'cover',
   },
   cardImagePlaceholder: {
+    flex: 1,
+    flexGrow: 1,
     width: '100%',
-    height: '100%', // Take full height of container
     backgroundColor: '#333',
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardName: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 2,
-  },
   cardSet: {
     color: '#ccc',
     fontSize: 8,
-  },
-  cardInfoContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 45, // Even more height to ensure price is clearly visible
-    paddingTop: 2,
-    backgroundColor: 'rgba(26, 26, 26, 0.95)', // More opaque background for better readability
-  },
-  cardInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 1, // Increased spacing for better readability
-  },
-  cardInfoLabel: {
-    color: '#888',
-    fontSize: 8, // Larger for better readability
-    fontWeight: '600',
-  },
-  cardInfoValue: {
-    color: '#ccc',
-    fontSize: 8, // Larger for better readability
-    fontWeight: '500',
-  },
-  cardPrice: {
-    color: '#FF8610',
-    fontSize: 11, // Larger for better readability
-    fontWeight: 'bold',
   },
   modalContainer: {
     flex: 1,
@@ -1119,6 +1293,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     lineHeight: 20,
   },
+  templateButton: {
+    marginTop: 12,
+    marginBottom: 16,
+    borderColor: '#FF8610',
+  },
   csvInput: {
     backgroundColor: '#2a2a2a',
     borderRadius: 8,
@@ -1150,8 +1329,58 @@ const styles = StyleSheet.create({
     color: '#ccc',
     lineHeight: 20,
   },
-  disabledButton: {
-    opacity: 0.5,
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
+  },
+  addCardContent: {
+    padding: 20,
+    paddingBottom: 40,
+    gap: 16,
+  },
+  searchActions: {
+    marginTop: 12,
+    alignItems: 'flex-start',
+  },
+  searchStatusText: {
+    marginTop: 12,
+  },
+  searchResultCard: {
+    marginTop: 16,
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#2a2a2a',
+    gap: 12,
+    alignItems: 'center',
+  },
+  searchResultImage: {
+    width: 120,
+    height: 170,
+    borderRadius: 8,
+  },
+  searchResultInfo: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 4,
+  },
+  searchResultTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  searchResultSubtitle: {
+    fontSize: 14,
+    color: '#ccc',
+    textAlign: 'center',
+  },
+  searchResultPrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF8610',
+  },
+  searchResultButton: {
+    alignSelf: 'stretch',
   },
   sampleBox: {
     backgroundColor: '#333',
@@ -1379,4 +1608,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  screenContent: {
+    paddingBottom: 32,
+  },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

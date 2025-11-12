@@ -29,6 +29,14 @@ const customTheme = {
   'color-primary-transparent-400': 'rgba(255, 134, 16, 0.32)',
   'color-primary-transparent-500': 'rgba(255, 134, 16, 0.40)',
   'color-primary-transparent-600': 'rgba(255, 134, 16, 0.48)',
+  'background-basic-color-1': '#222B45',
+  'background-basic-color-2': '#222B45',
+  'background-basic-color-3': '#222B45',
+  'background-basic-color-4': '#222B45',
+  'background-alternative-color-1': '#222B45',
+  'background-alternative-color-2': '#222B45',
+  'background-alternative-color-3': '#222B45',
+  'background-alternative-color-4': '#222B45',
 };
 
 // Import screens
@@ -48,6 +56,7 @@ import { useAuthStore } from './src/state/useAuthStore';
 import { NotificationService } from './src/lib/notificationService';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { useFriendNotifications } from './src/hooks/useFriendNotifications';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -66,6 +75,8 @@ export default function App() {
   const { user, initialized, initializeAuth } = useAuthStore();
   const notificationListener = useRef<Notifications.Subscription>();
   const responseListener = useRef<Notifications.Subscription>();
+
+  useFriendNotifications(user?.uid);
 
   useEffect(() => {
     const unsubscribe = initializeAuth();
@@ -141,7 +152,7 @@ export default function App() {
               headerStyle: { backgroundColor: '#222B45' },
               headerTintColor: '#FFFFFF',
               headerTitleStyle: { fontWeight: 'bold' },
-              contentStyle: { backgroundColor: '#1A1A1A' }
+              contentStyle: { backgroundColor: '#222B45' }
             }}
           >
           {user ? (

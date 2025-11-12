@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   ScrollView, 
@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   Image,
   ImageBackground,
-  View
+  View,
+  useWindowDimensions
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
@@ -16,6 +17,8 @@ import { RootStackParamList, Binder } from '../types';
 import { BinderService } from '../lib/binderService';
 import { updateAllBindersToPublic } from '../lib/updateBindersToPublic';
 import AlertModal from '../components/AlertModal';
+import { ScreenContainer } from '../components/ScreenContainer';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Helper function to format Firebase timestamps
 const formatFirebaseTimestamp = (timestamp: any): string => {
@@ -82,6 +85,21 @@ export default function MyBindersScreen({ navigation }: Props) {
   
   // Create modal image state
   const [createModalImageUri, setCreateModalImageUri] = useState<string | null>(null);
+  const { width } = useWindowDimensions();
+
+  const headerStyles = useMemo(
+    () => ({
+      container: [
+        styles.header,
+        width < 500 && styles.headerStacked,
+      ],
+      title: [
+        styles.title,
+        width < 500 && styles.titleStacked,
+      ],
+    }),
+    [width]
+  );
 
   const showAlertModal = (title: string, message: string, type: 'success' | 'danger' = 'danger') => {
     setAlertTitle(title);
@@ -249,39 +267,45 @@ export default function MyBindersScreen({ navigation }: Props) {
     });
   };
 
-  if (loading) {
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <Layout style={styles.loadingContainer} level="1">
+          <Spinner size="large" status="primary" />
+          <Text category="s1" appearance="hint" style={styles.loadingText}>Loading binders...</Text>
+        </Layout>
+      );
+    }
+
     return (
-      <Layout style={styles.loadingContainer}>
-        <Spinner size="large" status="primary" />
-        <Text category="s1" appearance="hint" style={styles.loadingText}>Loading binders...</Text>
-      </Layout>
-    );
-  }
+      <>
+        <Layout style={headerStyles.container} level="2">
+          <Text category="h4" style={headerStyles.title}>My Binders</Text>
+          <Button 
+            status="primary"
+            size="small"
+            onPress={() => setShowCreateModal(true)}
+          >
+            + New Binder
+          </Button>
+        </Layout>
 
-  return (
-    <Layout style={styles.container}>
-      <Layout style={styles.header} level="2">
-        <Text category="h4" style={styles.title}>My Binders</Text>
-        <Button 
-          status="primary"
-          size="small"
-          onPress={() => setShowCreateModal(true)}
+        <ScrollView
+          style={styles.bindersList}
+          contentContainerStyle={styles.bindersContent}
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
         >
-          + New Binder
-        </Button>
-      </Layout>
-
-      <ScrollView style={styles.bindersList}>
-        {binders.length === 0 ? (
-          <Layout style={styles.emptyState}>
-            <Feather name="book" size={64} color="#FF8610" />
-            <Text category="h5" style={styles.emptyTitle}>No binders yet</Text>
-            <Text category="s1" appearance="hint" style={styles.emptyDescription} center>
-              Create your first binder to start organizing your MTG collection
-            </Text>
-          </Layout>
-        ) : (
-          binders.map((binder, index) => {
+          {binders.length === 0 ? (
+            <Layout style={styles.emptyState}>
+              <Feather name="book" size={64} color="#FF8610" />
+              <Text category="h5" style={styles.emptyTitle}>No binders yet</Text>
+              <Text category="s1" appearance="hint" style={styles.emptyDescription} center>
+                Create your first binder to start organizing your MTG collection
+              </Text>
+            </Layout>
+          ) : (
+            binders.map((binder, index) => {
             const { cardCount, totalValue } = calculateBinderStats(binder);
             
             return binder.backgroundImageUrl ? (
@@ -366,8 +390,15 @@ export default function MyBindersScreen({ navigation }: Props) {
               </Card>
             );
           })
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
+      </>
+    );
+  };
+
+  return (
+    <ScreenContainer>
+      {renderContent()}
 
       {/* Create Binder Modal */}
       <Modal
@@ -375,7 +406,8 @@ export default function MyBindersScreen({ navigation }: Props) {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <Layout style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <Layout style={styles.modalContainer} level="1">
           <Layout style={styles.modalHeader} level="2">
             <Button
               appearance="ghost"
@@ -452,7 +484,8 @@ export default function MyBindersScreen({ navigation }: Props) {
               <Text category="s1" appearance="hint" style={styles.infoText}>• Real-time card pricing</Text>
             </Card>
           </Layout>
-        </Layout>
+          </Layout>
+        </SafeAreaView>
       </Modal>
       
       {/* Edit Background Image Modal */}
@@ -461,7 +494,8 @@ export default function MyBindersScreen({ navigation }: Props) {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <Layout style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <Layout style={styles.modalContainer} level="1">
           <Layout style={styles.modalHeader} level="2">
             <Button
               appearance="ghost"
@@ -512,7 +546,8 @@ export default function MyBindersScreen({ navigation }: Props) {
               </Text>
             </Card>
           </Layout>
-        </Layout>
+          </Layout>
+        </SafeAreaView>
       </Modal>
       
       <AlertModal
@@ -522,41 +557,54 @@ export default function MyBindersScreen({ navigation }: Props) {
         type={alertType}
         onClose={() => setShowAlert(false)}
       />
-    </Layout>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 32,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 12,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: 10,
+    paddingTop: 6,
     borderRadius: 8,
+    gap: 12,
+  },
+  headerStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 16,
   },
   title: {
     marginBottom: 0,
+  },
+  titleStacked: {
+    textAlign: 'left',
+    width: '100%',
   },
   bindersList: {
     flex: 1,
     paddingHorizontal: 20,
   },
+  bindersContent: {
+    paddingBottom: 32,
+  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 24,
+    gap: 12,
   },
   emptyIcon: {
     marginBottom: 16,
@@ -569,17 +617,16 @@ const styles = StyleSheet.create({
   emptyDescription: {
     textAlign: 'center',
     lineHeight: 24,
-    paddingHorizontal: 20,
   },
   binderCardContainer: {
-    marginBottom: 12,
-    borderRadius: 8,
+    marginBottom: 16,
+    borderRadius: 10,
     overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
   },
   firstBinder: {
     marginTop: 8,
@@ -587,11 +634,12 @@ const styles = StyleSheet.create({
   binderCard: {
     marginBottom: 12,
     overflow: 'hidden',
+    borderRadius: 10,
   },
   binderWrapper: {
     width: '100%',
-    minHeight: 160,
-    borderRadius: 8,
+    minHeight: 180,
+    borderRadius: 10,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -614,9 +662,9 @@ const styles = StyleSheet.create({
   binderContent: {
     flex: 1,
     padding: 16,
-    paddingTop: 10,
-    paddingBottom: 5,
-    backgroundColor: 'transparent',
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: 'rgba(15, 15, 15, 0.4)',
     flexDirection: 'column',
   },
   binderSpacer: {
@@ -630,15 +678,17 @@ const styles = StyleSheet.create({
     zIndex: 2,
     padding: 8,
     borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   binderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    padding: 8,
-    borderRadius: 6,
+    marginBottom: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
   },
   binderName: {
     flex: 1,
@@ -646,19 +696,22 @@ const styles = StyleSheet.create({
   },
   binderDescription: {
     marginBottom: 12,
-    marginTop: 8,
+    marginTop: 6,
   },
   binderStats: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
     gap: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     padding: 8,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   statText: {
     marginBottom: 0,
+  },
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
   },
   modalContainer: {
     flex: 1,
@@ -668,8 +721,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    borderBottomWidth: 1,
-    borderRadius: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#2E2E2E',
   },
   modalTitle: {
     marginBottom: 0,

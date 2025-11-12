@@ -13,6 +13,7 @@ import { FriendsService, Friend, FriendRequest } from '../lib/friendsService';
 import { getCountryFlag } from '../lib/countryFlags';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
+import { ScreenContainer } from '../components/ScreenContainer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Friends'>;
 
@@ -165,15 +166,17 @@ export default function FriendsScreen({ navigation }: Props) {
 
   if (loading) {
     return (
-      <Layout style={styles.loadingContainer}>
-        <Spinner size="large" status="primary" />
-        <Text category="s1" appearance="hint" style={styles.loadingText}>Loading friends...</Text>
-      </Layout>
+      <ScreenContainer>
+        <Layout style={styles.loadingContainer}>
+          <Spinner size="large" status="primary" />
+          <Text category="s1" appearance="hint" style={styles.loadingText}>Loading friends...</Text>
+        </Layout>
+      </ScreenContainer>
     );
   }
 
   return (
-    <Layout style={styles.container}>
+    <ScreenContainer>
       <Layout style={styles.header} level="2">
         <Text category="h4" style={styles.title}>Friends</Text>
         <Button 
@@ -207,7 +210,11 @@ export default function FriendsScreen({ navigation }: Props) {
         </Button>
       </Layout>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+      >
         {activeTab === 'friends' ? (
           friends.length === 0 ? (
             <Layout style={styles.emptyState}>
@@ -374,14 +381,11 @@ export default function FriendsScreen({ navigation }: Props) {
         }}
         onCancel={() => setShowConfirm(false)}
       />
-    </Layout>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -395,7 +399,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: 10,
+    paddingTop: 6,
     borderRadius: 8,
   },
   title: {
@@ -414,7 +418,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 8,
   },
   emptyState: {
     alignItems: 'center',

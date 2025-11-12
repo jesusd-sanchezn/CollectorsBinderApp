@@ -13,6 +13,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Binder } from '../types';
 import { FriendsService } from '../lib/friendsService';
 import AlertModal from '../components/AlertModal';
+import { ScreenContainer } from '../components/ScreenContainer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'FriendBinders'>;
 
@@ -61,15 +62,17 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
 
   if (loading) {
     return (
-      <Layout style={styles.loadingContainer}>
-        <Spinner size="large" status="primary" />
-        <Text category="s1" appearance="hint" style={styles.loadingText}>Loading {friendName}'s binders...</Text>
-      </Layout>
+      <ScreenContainer>
+        <Layout style={styles.loadingContainer}>
+          <Spinner size="large" status="primary" />
+          <Text category="s1" appearance="hint" style={styles.loadingText}>Loading {friendName}'s binders...</Text>
+        </Layout>
+      </ScreenContainer>
     );
   }
 
   return (
-    <Layout style={styles.container}>
+    <ScreenContainer>
       <Layout style={styles.header} level="2">
         <Button
           appearance="ghost"
@@ -83,7 +86,12 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
         <Layout style={styles.placeholder} />
       </Layout>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+      >
         {binders.length === 0 ? (
           <Layout style={styles.emptyState}>
             <Feather name="book" size={64} color="#FF8610" />
@@ -174,14 +182,11 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
         type={alertType}
         onClose={() => setShowAlert(false)}
       />
-    </Layout>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -195,7 +200,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: 10,
+    paddingTop: 6,
     borderRadius: 8,
   },
   title: {
@@ -209,6 +214,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  contentContainer: {
+    paddingBottom: 32,
   },
   emptyState: {
     alignItems: 'center',

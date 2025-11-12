@@ -34,6 +34,7 @@ export interface FriendRequest {
   fromUserName: string;
   toUserId: string;
   toUserEmail: string;
+  toUserName?: string;
   status: 'pending' | 'accepted' | 'declined';
   createdAt: any; // Firebase Timestamp
   updatedAt: any; // Firebase Timestamp
@@ -79,6 +80,7 @@ export class FriendsService {
       const friendDoc = usersSnapshot.docs[0];
       const friendUserId = friendDoc.id;
       const friendData = friendDoc.data();
+      const friendDisplayName = friendData?.displayName || friendEmail.split('@')[0];
 
       // Check if friendship already exists
       const existingFriendshipQuery = query(
@@ -100,6 +102,7 @@ export class FriendsService {
         fromUserName: currentUser.displayName || currentUser.email.split('@')[0],
         toUserId: friendUserId,
         toUserEmail: friendEmail,
+        toUserName: friendDisplayName,
         status: 'pending',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -161,11 +164,15 @@ export class FriendsService {
         throw new Error('Request is no longer pending');
       }
 
-      // Update the friend request status
-      await updateDoc(doc(db, 'friendRequests', requestId), {
-        status: 'accepted',
-        updatedAt: serverTimestamp()
-      });
+      try {
+        await updateDoc(doc(db, 'friendRequests', requestId), {
+          status: 'accepted',
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        console.error('Firestore: Failed to update friend request status', error);
+        throw error;
+      }
 
       // Fetch current user's display name
       const currentUser = auth.currentUser;
@@ -197,19 +204,37 @@ export class FriendsService {
         updatedAt: serverTimestamp()
       };
 
-      await addDoc(collection(db, 'friendships'), friendshipData1);
-      await addDoc(collection(db, 'friendships'), friendshipData2);
+      try {
+        await addDoc(collection(db, 'friendships'), friendshipData1);
+      } catch (error) {
+        console.error('Firestore: Failed to create friendship record for sender', error);
+        throw error;
+      }
+
+      try {
+        await addDoc(collection(db, 'friendships'), friendshipData2);
+      } catch (error) {
+        console.error('Firestore: Failed to create friendship record for accepter', error);
+        throw error;
+      }
       
       console.log(`Friend request accepted from ${requestData.fromUserEmail}`);
       
-      // Send notification to the person who sent the request
+      // Notify current user locally that the friendship was created
       try {
-        const currentUser = auth.currentUser;
-        const senderName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
-        await NotificationService.notifyFriendAccepted(senderName, requestData.fromUserId);
+        const acceptorName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Friend';
+        await NotificationService.scheduleLocalNotification(
+          'Friend Added',
+          `${friendDisplayName} is now connected with you`,
+          {
+            type: 'friend_accepted',
+            friendId: requestData.fromUserId,
+            friendName: friendDisplayName,
+            userName: acceptorName,
+          }
+        );
       } catch (notificationError) {
-        console.error('Error sending notification:', notificationError);
-        // Don't fail the entire operation if notification fails
+        console.error('Error scheduling local notification:', notificationError);
       }
     } catch (error) {
       console.error('Error accepting friend request:', error);
