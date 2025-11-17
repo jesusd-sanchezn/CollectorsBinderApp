@@ -1,4 +1,4 @@
-// Utility function to format dates as mm/dd/yyyy
+// Utility function to format dates as yyyy-mm-dd
 export const formatDate = (timestamp: any): string => {
   if (!timestamp) return 'Recently';
   
@@ -21,12 +21,12 @@ export const formatDate = (timestamp: any): string => {
       return 'Recently';
     }
     
-    // Format as mm/dd/yyyy
+    // Format as yyyy-mm-dd
+    const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    const year = date.getFullYear();
     
-    return `${month}/${day}/${year}`;
+    return `${year}-${month}-${day}`;
   } catch (error) {
     console.error('Error formatting timestamp:', error);
     return 'Recently';

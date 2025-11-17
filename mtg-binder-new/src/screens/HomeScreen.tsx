@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { StyleSheet, ScrollView, useWindowDimensions, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Card } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useAuthStore } from '../state/useAuthStore';
+import { TradeService } from '../lib/tradeService';
 import ConfirmModal from '../components/ConfirmModal';
 import AlertModal from '../components/AlertModal';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -17,7 +18,35 @@ export default function HomeScreen({ navigation }: Props) {
   const [showAlert, setShowAlert] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
+  const [pendingTradesCount, setPendingTradesCount] = useState(0);
   const { width } = useWindowDimensions();
+
+  // Fetch pending trades count when component mounts or user changes
+  useEffect(() => {
+    const fetchPendingTradesCount = async () => {
+      if (!user) {
+        setPendingTradesCount(0);
+        return;
+      }
+
+      try {
+        const pendingTrades = await TradeService.getPendingTrades();
+        setPendingTradesCount(pendingTrades.length);
+      } catch (error) {
+        console.error('Error fetching pending trades count:', error);
+        setPendingTradesCount(0);
+      }
+    };
+
+    fetchPendingTradesCount();
+
+    // Refresh count when screen comes into focus
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchPendingTradesCount();
+    });
+
+    return unsubscribe;
+  }, [user, navigation]);
 
   const layoutStyles = useMemo(
     () => ({
@@ -123,7 +152,7 @@ export default function HomeScreen({ navigation }: Props) {
               onPress={() => navigation.navigate('Trade')}
               accessoryLeft={() => <Feather name="refresh-cw" size={20} color="#FFFFFF" />}
             >
-              Trades
+              {pendingTradesCount > 0 ? `Trades (${pendingTradesCount} pending)` : 'Trades'}
             </Button>
           </View>
           
