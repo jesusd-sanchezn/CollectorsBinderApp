@@ -23,72 +23,78 @@ export class CSVParser {
     const cards: ParsedCard[] = [];
     const errors: string[] = [];
     
-    if (lines.length < 2) {
+    if (lines.length < 1) {
       return {
         success: false,
         imported: 0,
-        errors: ['CSV must have at least a header row and one data row'],
+        errors: ['CSV must have at least one data row'],
         cards: []
       };
     }
 
-    // Parse header to find column indices
-    const header = lines[0].split(',').map(h => h.trim().toLowerCase());
-    const nameIndex = header.findIndex(h => h.includes('name') || h.includes('card'));
-    const setIndex = header.findIndex(h => h.includes('edition') || h.includes('set'));
-    const quantityIndex = header.findIndex(h => h.includes('quantityx') || h.includes('qty') || h.includes('quantity') || h.includes('count'));
-    const conditionIndex = header.findIndex(h => h.includes('condition') || h.includes('cond'));
-    const finishIndex = header.findIndex(h => h.includes('foil') || h.includes('finish'));
-    const notesIndex = header.findIndex(h => h.includes('note') || h.includes('comment'));
+    // Detect if first line is a header or data
+    const firstLine = this.parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+    const hasHeader = this.detectHeader(firstLine);
+    
+    let nameIndex: number;
+    let quantityIndex: number;
+    let dataStartIndex: number;
 
-    // Validate required columns
-    if (nameIndex === -1) {
-      errors.push('Card name column not found');
-    }
-    if (setIndex === -1) {
-      errors.push('Set column not found');
-    }
-    if (quantityIndex === -1) {
-      errors.push('Quantity column not found');
-    }
+    if (hasHeader) {
+      // Parse header to find column indices - only need quantity and name
+      const header = firstLine;
+      nameIndex = header.findIndex(h => h.includes('name') || h.includes('card'));
+      quantityIndex = header.findIndex(h => h.includes('quantityx') || h.includes('qty') || h.includes('quantity') || h.includes('count'));
+      dataStartIndex = 1; // Start from second line
 
-    if (errors.length > 0) {
-      return {
-        success: false,
-        imported: 0,
-        errors,
-        cards: []
-      };
+      // Validate required columns
+      if (nameIndex === -1) {
+        errors.push('Card name column not found in header');
+      }
+      if (quantityIndex === -1) {
+        errors.push('Quantity column not found in header');
+      }
+
+      if (errors.length > 0) {
+        return {
+          success: false,
+          imported: 0,
+          errors,
+          cards: []
+        };
+      }
+    } else {
+      // No header detected - use default column order: Quantity, Name
+      quantityIndex = 0;
+      nameIndex = 1;
+      dataStartIndex = 0; // Start from first line
     }
 
     // Parse data rows
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = dataStartIndex; i < lines.length; i++) {
       try {
         const values = this.parseCSVLine(lines[i]);
         
-        if (values.length < Math.max(nameIndex, setIndex, quantityIndex) + 1) {
-          errors.push(`Row ${i + 1}: Not enough columns`);
+        if (values.length < Math.max(nameIndex, quantityIndex) + 1) {
+          errors.push(`Row ${i + 1}: Not enough columns (need at least quantity and card name)`);
           continue;
         }
 
         // Parse quantity (handle "1x" format)
         const quantityStr = values[quantityIndex]?.trim() || '1';
-        const quantity = parseInt(quantityStr.replace('x', '')) || 1;
+        const quantity = parseInt(quantityStr.replace(/x/gi, '')) || 1;
         
-        // Parse finish (handle empty foil column)
-        const finishValue = values[finishIndex]?.trim() || '';
-        const finish = finishValue.toLowerCase() === 'foil' ? 'foil' : 'nonfoil';
-        
-        // Parse set name (remove parentheses)
-        const setName = values[setIndex]?.trim().replace(/[()]/g, '') || '';
+        // Extract card name - preserves apostrophes and other special characters
+        // Examples: "Teferi's Protection", "Jace's Phantasm", "O'Brien's Card"
+        const cardName = values[nameIndex]?.trim() || '';
         
         const card: ParsedCard = {
-          name: values[nameIndex]?.trim() || '',
-          set: setName,
+          name: cardName,
+          set: '', // Will be fetched from Scryfall
           quantity: quantity,
-          condition: values[conditionIndex]?.trim() || 'NM',
-          finish: finish,
-          notes: values[notesIndex]?.trim() || ''
+          condition: 'NM', // Default condition
+          finish: 'nonfoil', // Always nonfoil, will fetch latest printing
+          notes: ''
         };
 
         if (!card.name) {
@@ -113,57 +119,208 @@ export class CSVParser {
   private static parseCSVLine(line: string): string[] {
     const result: string[] = [];
     let current = '';
-    let inQuotes = false;
+    let inDoubleQuotes = false;
+    let inSingleQuotes = false;
     
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
+      const nextChar = i + 1 < line.length ? line[i + 1] : null;
+      const prevChar = i > 0 ? line[i - 1] : null;
+      const inQuotes = inDoubleQuotes || inSingleQuotes;
       
       if (char === '"') {
-        inQuotes = !inQuotes;
+        if (inDoubleQuotes && nextChar === '"') {
+          // Escaped quote (double quote inside double-quoted field) - add quote to current field
+          // This handles: "Card ""Name""" -> Card "Name"
+          current += '"';
+          i++; // Skip the next quote
+        } else if (inDoubleQuotes && (nextChar === ',' || nextChar === null || nextChar === '\r' || nextChar === '\n')) {
+          // End of double-quoted field: "Field", or "Field" at end of line
+          inDoubleQuotes = false;
+          // Don't add the closing quote to current, it's just a delimiter
+        } else if (!inQuotes && (i === 0 || prevChar === ',')) {
+          // Start of double-quoted field: ,"Field" or "Field" at start
+          inDoubleQuotes = true;
+          // Don't add the opening quote to current
+        } else if (inDoubleQuotes) {
+          // Unexpected quote inside double-quoted field (not escaped) - treat as literal
+          // This handles malformed CSV gracefully
+          current += '"';
+        } else {
+          // Unquoted field with a quote character - treat as literal character
+          // This handles: Card "Name" (technically invalid CSV but we'll be lenient)
+          current += '"';
+        }
+      } else if (char === "'" && !inDoubleQuotes) {
+        // Handle single quotes - only process if not already in double quotes
+        if (inSingleQuotes && (nextChar === ',' || nextChar === null || nextChar === '\r' || nextChar === '\n')) {
+          // End of single-quoted field: 'Field', or 'Field' at end of line
+          inSingleQuotes = false;
+          // Don't add the closing quote to current, it's just a delimiter
+        } else if (!inQuotes && (i === 0 || prevChar === ',')) {
+          // Start of single-quoted field: ,'Field' or 'Field' at start
+          inSingleQuotes = true;
+          // Don't add the opening quote to current
+        } else if (inSingleQuotes && nextChar === "'") {
+          // Escaped single quote (double single quote inside single-quoted field)
+          // This handles: 'Card ''Name''' -> Card 'Name'
+          current += "'";
+          i++; // Skip the next quote
+        } else if (inSingleQuotes) {
+          // Single quote inside single-quoted field (not escaped) - treat as literal
+          current += "'";
+        } else {
+          // Unquoted field with a single quote - treat as literal character (apostrophe)
+          // This handles: Teferi's Protection (apostrophe in card name)
+          current += "'";
+        }
       } else if (char === ',' && !inQuotes) {
-        result.push(current);
+        // Field separator - only when not in any quotes
+        result.push(current.trim());
         current = '';
       } else {
+        // Add character to current field
+        // This includes:
+        // - Single quotes/apostrophes (') when inside double quotes or unquoted
+        //   Examples: "Teferi's Protection", 'Teferi's Protection', Teferi's Protection
+        // - Commas when inside quotes (part of the field value)
+        // - All other characters including spaces, special chars, etc.
         current += char;
       }
     }
     
-    result.push(current);
+    // Add the last field (even if we ended in quotes, that's fine)
+    result.push(current.trim());
+    
     return result;
   }
 
+  // Detect if the first line is a header row or data
+  private static detectHeader(firstLine: string[]): boolean {
+    if (firstLine.length === 0) return false;
+    
+    // Check if the line contains header-like keywords (simplified for quantity and name only)
+    const headerKeywords = ['name', 'card', 'quantity', 'qty', 'count'];
+    const lineText = firstLine.join(' ').toLowerCase();
+    
+    // Count how many header keywords are found
+    const keywordMatches = headerKeywords.filter(keyword => lineText.includes(keyword)).length;
+    
+    // Check if first column looks like a quantity number (data) vs text (header)
+    const firstColumn = firstLine[0]?.trim() || '';
+    const looksLikeQuantity = !isNaN(parseFloat(firstColumn.replace(/x/gi, ''))) && firstColumn.length < 15;
+    
+    // Check if second column looks like a card name (common card name patterns)
+    const secondColumn = firstLine[1]?.trim() || '';
+    const hasCardNamePattern = secondColumn.length > 3 && 
+      (secondColumn.includes(' ') || 
+       secondColumn.includes("'") || 
+       secondColumn.length > 10);
+    
+    // It's a header if:
+    // - We find header keywords (name/quantity), OR
+    // - First column doesn't look like a quantity
+    if (keywordMatches >= 1) {
+      return true; // Header indicator
+    }
+    
+    if (looksLikeQuantity && hasCardNamePattern) {
+      return false; // Looks like data row
+    }
+    
+    // Default: if first column doesn't look like a number, assume header
+    return !looksLikeQuantity;
+  }
+
   // Convert parsed cards to our app's Card format
-  static async convertToAppCards(parsedCards: ParsedCard[]): Promise<any[]> {
-    // First, get all card images in batch
-    const cardImageRequests = parsedCards.map(card => ({
-      name: card.name,
-      set: card.set
-    }));
+  static async convertToAppCards(
+    parsedCards: ParsedCard[],
+    onProgress?: (stage: string, current: number, total: number) => void
+  ): Promise<any[]> {
+    const appCards: any[] = [];
+    const BATCH_SIZE = 5; // Process 5 cards at a time
+    const DELAY_BETWEEN_BATCHES = 200; // 200ms delay between batches
+    const DELAY_BETWEEN_CARDS = 100; // 100ms delay between cards in a batch
     
-    const imageMap = await CardImageService.getMultipleCardImages(cardImageRequests);
-    
-    // Convert to app format with real images and prices
-    const appCards = await Promise.all(
-      parsedCards.map(async (card, index) => {
-        const imageUrl = imageMap.get(card.name) || this.getFallbackImageUrl(card.name);
-        const price = await CardImageService.getCardPrice(card.name, card.set, card.finish === 'foil');
+    // Process cards in batches to fetch latest non-foil printings
+    for (let i = 0; i < parsedCards.length; i += BATCH_SIZE) {
+      const batch = parsedCards.slice(i, i + BATCH_SIZE);
+      
+      // Process batch
+      const batchPromises = batch.map(async (card, batchIndex) => {
+        // Add small delay even within batch to be respectful
+        if (batchIndex > 0) {
+          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_CARDS));
+        }
         
-        return {
-          id: `imported-${Date.now()}-${index}`,
-          name: card.name,
-          set: card.set,
-          setCode: this.extractSetCode(card.set),
-          collectorNumber: '1', // Default, would need to be looked up
-          imageUrl: imageUrl,
-          price: price || this.getEstimatedPrice(card.name, card.finish),
-          rarity: 'Unknown',
-          condition: card.condition as any,
-          finish: card.finish as any,
-          quantity: card.quantity,
-          notes: card.notes
-        };
-      })
-    );
+        try {
+          if (onProgress) {
+            onProgress('fetching', i + batchIndex + 1, parsedCards.length);
+          }
+          
+          // Fetch latest non-foil printing
+          const printing = await CardImageService.getLatestNonFoilPrinting(card.name);
+          
+          if (printing) {
+            return {
+              id: `imported-${Date.now()}-${i + batchIndex}`,
+              name: card.name,
+              set: printing.setName,
+              setCode: printing.setCode,
+              collectorNumber: printing.collectorNumber,
+              imageUrl: printing.imageUrl || this.getFallbackImageUrl(card.name),
+              price: printing.price || this.getEstimatedPrice(card.name, 'nonfoil'),
+              rarity: 'Unknown',
+              condition: card.condition as any,
+              finish: 'nonfoil' as any,
+              quantity: card.quantity,
+              notes: card.notes
+            };
+          } else {
+            // Fallback if no printing found
+            return {
+              id: `imported-${Date.now()}-${i + batchIndex}`,
+              name: card.name,
+              set: '',
+              setCode: '',
+              collectorNumber: '',
+              imageUrl: this.getFallbackImageUrl(card.name),
+              price: this.getEstimatedPrice(card.name, 'nonfoil'),
+              rarity: 'Unknown',
+              condition: card.condition as any,
+              finish: 'nonfoil' as any,
+              quantity: card.quantity,
+              notes: card.notes
+            };
+          }
+        } catch (error) {
+          console.error(`Error processing card ${card.name}:`, error);
+          // Return fallback card
+          return {
+            id: `imported-${Date.now()}-${i + batchIndex}`,
+            name: card.name,
+            set: '',
+            setCode: '',
+            collectorNumber: '',
+            imageUrl: this.getFallbackImageUrl(card.name),
+            price: 0,
+            rarity: 'Unknown',
+            condition: card.condition as any,
+            finish: 'nonfoil' as any,
+            quantity: card.quantity,
+            notes: card.notes
+          };
+        }
+      });
+      
+      const batchResults = await Promise.all(batchPromises);
+      appCards.push(...batchResults);
+      
+      // Delay between batches (except for the last batch)
+      if (i + BATCH_SIZE < parsedCards.length) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+      }
+    }
     
     return appCards;
   }

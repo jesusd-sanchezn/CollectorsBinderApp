@@ -66,34 +66,48 @@ export class TradeService {
     try {
       const currentUserId = this.getCurrentUserId();
       
-      const q = query(
-        collection(db, 'trades'),
-        where('initiatorId', '==', currentUserId),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const trades = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Trade));
+      // Get trades where user is initiator (without orderBy to avoid index issues)
+      let trades: Trade[] = [];
+      try {
+        const q = query(
+          collection(db, 'trades'),
+          where('initiatorId', '==', currentUserId)
+        );
+        const querySnapshot = await getDocs(q);
+        trades = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Trade));
+      } catch (error) {
+        console.error('Error fetching initiated trades:', error);
+        // Continue with empty array
+      }
 
-      // Also get trades where user is recipient
-      const q2 = query(
-        collection(db, 'trades'),
-        where('recipientId', '==', currentUserId),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const querySnapshot2 = await getDocs(q2);
-      const trades2 = querySnapshot2.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Trade));
+      // Get trades where user is recipient (without orderBy to avoid index issues)
+      let trades2: Trade[] = [];
+      try {
+        const q2 = query(
+          collection(db, 'trades'),
+          where('recipientId', '==', currentUserId)
+        );
+        const querySnapshot2 = await getDocs(q2);
+        trades2 = querySnapshot2.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Trade));
+      } catch (error) {
+        console.error('Error fetching received trades:', error);
+        // Continue with empty array
+      }
 
-      // Merge and sort by createdAt descending
+      // Merge and sort by createdAt descending (in memory)
       const allTrades = [...trades, ...trades2];
-      return allTrades.sort((a, b) => {
+      // Remove duplicates (in case a trade somehow has both initiatorId and recipientId as the same user)
+      const uniqueTrades = Array.from(
+        new Map(allTrades.map(trade => [trade.id, trade])).values()
+      );
+      
+      return uniqueTrades.sort((a, b) => {
         const aDate = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 
                       a.createdAt instanceof Date ? a.createdAt.getTime() : 
                       typeof a.createdAt === 'number' ? a.createdAt : 0;
@@ -113,18 +127,46 @@ export class TradeService {
     try {
       const currentUserId = this.getCurrentUserId();
       
-      const q = query(
-        collection(db, 'trades'),
-        where('recipientId', '==', currentUserId),
-        where('status', '==', 'pending'),
-        orderBy('createdAt', 'desc')
-      );
+      // Try with orderBy first, fall back to without if index is missing
+      let querySnapshot;
+      try {
+        const q = query(
+          collection(db, 'trades'),
+          where('recipientId', '==', currentUserId),
+          where('status', '==', 'pending'),
+          orderBy('createdAt', 'desc')
+        );
+        querySnapshot = await getDocs(q);
+      } catch (error: any) {
+        // If orderBy fails (missing index), try without it
+        if (error?.code === 'failed-precondition') {
+          console.warn('Firestore index missing for orderBy, fetching without sort');
+          const q = query(
+            collection(db, 'trades'),
+            where('recipientId', '==', currentUserId),
+            where('status', '==', 'pending')
+          );
+          querySnapshot = await getDocs(q);
+        } else {
+          throw error;
+        }
+      }
       
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      const trades = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Trade));
+      
+      // Sort in memory if we didn't use orderBy
+      return trades.sort((a, b) => {
+        const aDate = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 
+                      a.createdAt instanceof Date ? a.createdAt.getTime() : 
+                      typeof a.createdAt === 'number' ? a.createdAt : 0;
+        const bDate = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 
+                      b.createdAt instanceof Date ? b.createdAt.getTime() : 
+                      typeof b.createdAt === 'number' ? b.createdAt : 0;
+        return bDate - aDate; // Descending order (newest first)
+      });
     } catch (error) {
       console.error('Error fetching pending trades:', error);
       return [];
@@ -182,10 +224,15 @@ export class TradeService {
       await updateDoc(doc(db, 'trades', tradeId), updateData);
 
       // Send notification to initiator
+      // Note: This sends a local notification to the current user's device
+      // For proper push notifications to the initiator, you'd need to implement
+      // a server-side notification system (e.g., Cloud Functions)
       try {
         const currentUser = auth.currentUser;
-        const recipientName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
-        await NotificationService.notifyTradeAccepted(recipientName, tradeId);
+        const acceptorName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
+        // The notification will appear on the recipient's device (current user)
+        // In a production app, you'd send a push notification to the initiator's device
+        await NotificationService.notifyTradeAccepted(acceptorName, tradeId);
       } catch (notificationError) {
         console.error('Error sending notification:', notificationError);
         // Don't fail the entire operation if notification fails
@@ -223,10 +270,15 @@ export class TradeService {
       await updateDoc(doc(db, 'trades', tradeId), updateData);
 
       // Send notification to initiator
+      // Note: This sends a local notification to the current user's device
+      // For proper push notifications to the initiator, you'd need to implement
+      // a server-side notification system (e.g., Cloud Functions)
       try {
         const currentUser = auth.currentUser;
-        const recipientName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
-        await NotificationService.notifyTradeDeclined(recipientName, tradeId);
+        const declinerName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
+        // The notification will appear on the recipient's device (current user)
+        // In a production app, you'd send a push notification to the initiator's device
+        await NotificationService.notifyTradeDeclined(declinerName, tradeId);
       } catch (notificationError) {
         console.error('Error sending notification:', notificationError);
         // Don't fail the entire operation if notification fails

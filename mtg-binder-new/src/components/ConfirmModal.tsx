@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, StyleSheet } from 'react-native';
-import { Layout, Text, Button, Card } from '@ui-kitten/components';
+import { Layout, Text, Button, Card, Spinner } from '@ui-kitten/components';
 
 interface ConfirmModalProps {
   visible: boolean;
@@ -11,6 +11,7 @@ interface ConfirmModalProps {
   confirmStatus?: 'success' | 'danger' | 'warning' | 'info';
   onConfirm: () => void;
   onCancel: () => void;
+  loading?: boolean;
 }
 
 export default function ConfirmModal({ 
@@ -21,7 +22,8 @@ export default function ConfirmModal({
   cancelText = 'Cancel',
   confirmStatus = 'danger',
   onConfirm, 
-  onCancel 
+  onCancel,
+  loading = false
 }: ConfirmModalProps) {
   return (
     <Modal
@@ -40,6 +42,7 @@ export default function ConfirmModal({
               status="basic"
               onPress={onCancel}
               style={styles.cancelButton}
+              disabled={loading}
             >
               {cancelText}
             </Button>
@@ -47,8 +50,10 @@ export default function ConfirmModal({
               status={confirmStatus}
               onPress={onConfirm}
               style={styles.confirmButton}
+              disabled={loading}
+              accessoryLeft={loading ? () => <Spinner size="small" status="control" /> : undefined}
             >
-              {confirmText}
+              {loading ? 'Deleting...' : confirmText}
             </Button>
           </Layout>
         </Card>

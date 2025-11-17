@@ -14,6 +14,7 @@ import { RootStackParamList, Binder } from '../types';
 import { FriendsService } from '../lib/friendsService';
 import AlertModal from '../components/AlertModal';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { formatDate } from '../lib/dateUtils';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'FriendBinders'>;
 
@@ -128,9 +129,7 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
                         <Layout style={styles.binderStats}>
                           <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
                           <Text category="c1" appearance="hint" style={styles.statText}>
-                            Updated {binder.updatedAt ? 
-                              (binder.updatedAt.toDate ? binder.updatedAt.toDate().toLocaleDateString() : 'Recently') 
-                              : 'Recently'}
+                            Updated {formatDate(binder.updatedAt)}
                           </Text>
                         </Layout>
                       </Layout>
@@ -161,9 +160,7 @@ export default function FriendBindersScreen({ navigation, route }: Props) {
                       <Layout style={styles.binderStats}>
                         <Text category="c1" appearance="hint" style={styles.statText}>{binder.pages.length} pages</Text>
                         <Text category="c1" appearance="hint" style={styles.statText}>
-                          Updated {binder.updatedAt ? 
-                            (binder.updatedAt.toDate ? binder.updatedAt.toDate().toLocaleDateString() : 'Recently') 
-                            : 'Recently'}
+                          Updated {formatDate(binder.updatedAt)}
                         </Text>
                       </Layout>
                     </Layout>

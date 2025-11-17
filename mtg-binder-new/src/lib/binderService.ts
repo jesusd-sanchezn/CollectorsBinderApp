@@ -197,6 +197,24 @@ export class BinderService {
     }
   }
 
+  // Delete a binder
+  static async deleteBinder(binderId: string): Promise<void> {
+    try {
+      const binder = await this.getBinder(binderId);
+      if (!binder) throw new Error('Binder not found');
+
+      const userId = this.getCurrentUserId();
+      if (binder.ownerId !== userId) {
+        throw new Error('Only the owner can delete the binder');
+      }
+
+      await deleteDoc(doc(db, 'binders', binderId));
+    } catch (error) {
+      console.error('Error deleting binder:', error);
+      throw error;
+    }
+  }
+
   // Add a page to a binder
   static async addPageToBinder(binderId: string): Promise<void> {
     try {

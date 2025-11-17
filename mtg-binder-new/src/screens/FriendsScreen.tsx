@@ -17,29 +17,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Friends'>;
 
-// Helper function to format Firebase timestamps
-const formatFirebaseTimestamp = (timestamp: any): string => {
-  if (!timestamp) return 'Recently';
-  
-  try {
-    // If it's a Firebase timestamp, convert it to Date
-    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
-      return timestamp.toDate().toLocaleDateString();
-    }
-    // If it's already a Date object
-    if (timestamp instanceof Date) {
-      return timestamp.toLocaleDateString();
-    }
-    // If it's a number (milliseconds)
-    if (typeof timestamp === 'number') {
-      return new Date(timestamp).toLocaleDateString();
-    }
-    return 'Recently';
-  } catch (error) {
-    console.error('Error formatting timestamp:', error);
-    return 'Recently';
-  }
-};
+import { formatDate } from '../lib/dateUtils';
 
 export default function FriendsScreen({ navigation }: Props) {
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -275,7 +253,7 @@ export default function FriendsScreen({ navigation }: Props) {
                   <Text category="h6" style={styles.requestName}>{request.fromUserName}</Text>
                   <Text category="s1" appearance="hint" style={styles.requestEmail}>{request.fromUserEmail}</Text>
                   <Text category="c1" appearance="hint" style={styles.requestDate}>
-                    {formatFirebaseTimestamp(request.createdAt)}
+                    {formatDate(request.createdAt)}
                   </Text>
                 </Layout>
                 <Layout style={styles.requestActions}>

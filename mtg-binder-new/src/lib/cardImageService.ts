@@ -16,7 +16,11 @@ export interface ScryfallCard {
   }>;
   set: string;
   set_name: string;
+  set_type?: string;
   collector_number: string;
+  released_at?: string;
+  finishes?: string[];
+  frame_effects?: string[];
   prices?: {
     usd?: string;
     usd_foil?: string;
@@ -38,6 +42,8 @@ export class CardImageService {
       console.log(`Fetching image for: ${cardName} from set: ${setName}`);
       
       // Search for the card on Scryfall with better query handling
+      // Card names with apostrophes (like "Teferi's Protection") are handled correctly
+      // The cardName is already properly parsed from CSV and contains the apostrophe
       let searchQuery = `name:"${cardName}"`;
       
       // Add set filter if available
@@ -50,6 +56,7 @@ export class CardImageService {
         }
       }
       
+      // encodeURIComponent properly handles apostrophes and other special characters
       const encodedQuery = encodeURIComponent(searchQuery);
       const url = `https://api.scryfall.com/cards/search?q=${encodedQuery}&format=json`;
       console.log(`Scryfall URL: ${url}`);
@@ -128,9 +135,269 @@ export class CardImageService {
     }
   }
 
+  // Helper function to extract image URL from a card
+  private static extractImageUrl(card: ScryfallCard): string {
+    if (card.image_uris?.normal) {
+      return card.image_uris.normal;
+    } else if (card.image_uris?.border_crop) {
+      return card.image_uris.border_crop;
+    } else if (card.image_uris?.small) {
+      return card.image_uris.small;
+    } else if (card.card_faces?.[0]?.image_uris?.normal) {
+      return card.card_faces[0].image_uris.normal;
+    }
+    return '';
+  }
+
+  // Helper function to check if card is non-foil
+  private static isNonFoil(card: ScryfallCard): boolean {
+    return !card.finishes || !card.finishes.includes('foil');
+  }
+
+  // Get latest non-foil printing of a card (prefers special printings)
+  static async getLatestNonFoilPrinting(cardName: string): Promise<{
+    imageUrl: string;
+    setName: string;
+    setCode: string;
+    collectorNumber: string;
+    price: number;
+  } | null> {
+    try {
+      // Strategy 1: Use Scryfall's fuzzy named endpoint FIRST (most forgiving for special characters)
+      // This handles cases like "Palantir" -> "Palantír"
+      try {
+        const fuzzyName = encodeURIComponent(cardName);
+        const fuzzyResponse = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${fuzzyName}`);
+        
+        if (fuzzyResponse.ok) {
+          const card = await fuzzyResponse.json() as ScryfallCard;
+          // If we found a card, search for all its printings
+          if (card.name) {
+            // First try non-foil only
+            const allPrintingsQuery = encodeURIComponent(`name:"${card.name}" -is:foil`);
+            const printingsResponse = await fetch(`https://api.scryfall.com/cards/search?q=${allPrintingsQuery}&order=released&dir=desc&format=json`);
+            
+            if (printingsResponse.ok) {
+              const printingsData = await printingsResponse.json();
+              if (printingsData.data && printingsData.data.length > 0) {
+                // Prefer special printings
+                const specialPrintings = printingsData.data.filter((c: ScryfallCard) => 
+                  c.frame_effects && c.frame_effects.length > 0 && this.isNonFoil(c)
+                );
+                const selectedCard = specialPrintings.length > 0 ? specialPrintings[0] : printingsData.data.find((c: ScryfallCard) => this.isNonFoil(c)) || printingsData.data[0];
+                
+                const imageUrl = this.extractImageUrl(selectedCard);
+                if (imageUrl) {
+                  return {
+                    imageUrl,
+                    setName: selectedCard.set_name || '',
+                    setCode: selectedCard.set || '',
+                    collectorNumber: selectedCard.collector_number || '',
+                    price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+                  };
+                }
+              }
+            }
+            
+            // If no non-foil found, try all printings (including foil)
+            const allPrintingsQueryAny = encodeURIComponent(`name:"${card.name}"`);
+            const allPrintingsResponse = await fetch(`https://api.scryfall.com/cards/search?q=${allPrintingsQueryAny}&order=released&dir=desc&format=json`);
+            
+            if (allPrintingsResponse.ok) {
+              const allPrintingsData = await allPrintingsResponse.json();
+              if (allPrintingsData.data && allPrintingsData.data.length > 0) {
+                // Prefer special printings, then non-foil, then any
+                const specialPrintings = allPrintingsData.data.filter((c: ScryfallCard) => 
+                  c.frame_effects && c.frame_effects.length > 0
+                );
+                const nonFoilCards = allPrintingsData.data.filter((c: ScryfallCard) => this.isNonFoil(c));
+                const selectedCard = specialPrintings.length > 0 ? specialPrintings[0] : 
+                                   (nonFoilCards.length > 0 ? nonFoilCards[0] : allPrintingsData.data[0]);
+                
+                const imageUrl = this.extractImageUrl(selectedCard);
+                if (imageUrl) {
+                  return {
+                    imageUrl,
+                    setName: selectedCard.set_name || '',
+                    setCode: selectedCard.set || '',
+                    collectorNumber: selectedCard.collector_number || '',
+                    price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+                  };
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Continue to next strategy
+      }
+
+      // Strategy 2: Handle double-faced cards (split on //)
+      if (cardName.includes(' // ')) {
+        const firstFace = cardName.split(' // ')[0];
+        try {
+          // Try non-foil first
+          const query = encodeURIComponent(`name:"${firstFace}" -is:foil`);
+          const response = await fetch(`https://api.scryfall.com/cards/search?q=${query}&order=released&dir=desc&format=json`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.data && data.data.length > 0) {
+              const specialPrintings = data.data.filter((c: ScryfallCard) => 
+                c.frame_effects && c.frame_effects.length > 0 && this.isNonFoil(c)
+              );
+              const selectedCard = specialPrintings.length > 0 ? specialPrintings[0] : data.data.find((c: ScryfallCard) => this.isNonFoil(c)) || data.data[0];
+              
+              const imageUrl = this.extractImageUrl(selectedCard);
+              if (imageUrl) {
+                return {
+                  imageUrl,
+                  setName: selectedCard.set_name || '',
+                  setCode: selectedCard.set || '',
+                  collectorNumber: selectedCard.collector_number || '',
+                  price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+                };
+              }
+            }
+          }
+          
+          // If no non-foil found, try all printings
+          const allQuery = encodeURIComponent(`name:"${firstFace}"`);
+          const allResponse = await fetch(`https://api.scryfall.com/cards/search?q=${allQuery}&order=released&dir=desc&format=json`);
+          
+          if (allResponse.ok) {
+            const allData = await allResponse.json();
+            if (allData.data && allData.data.length > 0) {
+              const specialPrintings = allData.data.filter((c: ScryfallCard) => 
+                c.frame_effects && c.frame_effects.length > 0
+              );
+              const nonFoilCards = allData.data.filter((c: ScryfallCard) => this.isNonFoil(c));
+              const selectedCard = specialPrintings.length > 0 ? specialPrintings[0] : 
+                                 (nonFoilCards.length > 0 ? nonFoilCards[0] : allData.data[0]);
+              
+              const imageUrl = this.extractImageUrl(selectedCard);
+              if (imageUrl) {
+                return {
+                  imageUrl,
+                  setName: selectedCard.set_name || '',
+                  setCode: selectedCard.set || '',
+                  collectorNumber: selectedCard.collector_number || '',
+                  price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+                };
+              }
+            }
+          }
+        } catch (error) {
+          // Continue
+        }
+      }
+
+      // Strategy 3: Search without quotes (partial/fuzzy matching in search API)
+      try {
+        // Try non-foil first
+        const query = encodeURIComponent(`${cardName} -is:foil`);
+        const response = await fetch(`https://api.scryfall.com/cards/search?q=${query}&order=released&dir=desc&format=json`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.data && data.data.length > 0) {
+            const specialPrintings = data.data.filter((c: ScryfallCard) => 
+              c.frame_effects && c.frame_effects.length > 0 && this.isNonFoil(c)
+            );
+            const selectedCard = specialPrintings.length > 0 ? specialPrintings[0] : data.data.find((c: ScryfallCard) => this.isNonFoil(c)) || data.data[0];
+            
+            const imageUrl = this.extractImageUrl(selectedCard);
+            if (imageUrl) {
+              return {
+                imageUrl,
+                setName: selectedCard.set_name || '',
+                setCode: selectedCard.set || '',
+                collectorNumber: selectedCard.collector_number || '',
+                price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+              };
+            }
+          }
+        }
+        
+        // If no non-foil found, try all printings
+        const allQuery = encodeURIComponent(cardName);
+        const allResponse = await fetch(`https://api.scryfall.com/cards/search?q=${allQuery}&order=released&dir=desc&format=json`);
+        
+        if (allResponse.ok) {
+          const allData = await allResponse.json();
+          if (allData.data && allData.data.length > 0) {
+            const specialPrintings = allData.data.filter((c: ScryfallCard) => 
+              c.frame_effects && c.frame_effects.length > 0
+            );
+            const nonFoilCards = allData.data.filter((c: ScryfallCard) => this.isNonFoil(c));
+            const selectedCard = specialPrintings.length > 0 ? specialPrintings[0] : 
+                               (nonFoilCards.length > 0 ? nonFoilCards[0] : allData.data[0]);
+            
+            const imageUrl = this.extractImageUrl(selectedCard);
+            if (imageUrl) {
+              return {
+                imageUrl,
+                setName: selectedCard.set_name || '',
+                setCode: selectedCard.set || '',
+                collectorNumber: selectedCard.collector_number || '',
+                price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+              };
+            }
+          }
+        }
+      } catch (error) {
+        // Continue
+      }
+
+      // Strategy 4: Final fallback - search for any printing
+      try {
+        const query = encodeURIComponent(cardName);
+        const response = await fetch(`https://api.scryfall.com/cards/search?q=${query}&order=released&dir=desc&format=json`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.data && data.data.length > 0) {
+            // Prefer non-foil, but use any if needed
+            const nonFoilCards = data.data.filter((c: ScryfallCard) => this.isNonFoil(c));
+            const specialPrintings = data.data.filter((c: ScryfallCard) => 
+              c.frame_effects && c.frame_effects.length > 0
+            );
+            
+            // Priority: special non-foil > special any > non-foil > any
+            const specialNonFoil = specialPrintings.filter((c: ScryfallCard) => this.isNonFoil(c));
+            const selectedCard = specialNonFoil.length > 0 ? specialNonFoil[0] :
+                               (specialPrintings.length > 0 ? specialPrintings[0] :
+                               (nonFoilCards.length > 0 ? nonFoilCards[0] : data.data[0]));
+            
+            const imageUrl = this.extractImageUrl(selectedCard);
+            if (imageUrl) {
+              return {
+                imageUrl,
+                setName: selectedCard.set_name || '',
+                setCode: selectedCard.set || '',
+                collectorNumber: selectedCard.collector_number || '',
+                price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+              };
+            }
+          }
+        }
+      } catch (error) {
+        // Continue
+      }
+
+      console.log(`No printings found for ${cardName} after all strategies`);
+      return null;
+    } catch (error) {
+      console.error(`Error fetching latest printing for ${cardName}:`, error);
+      return null;
+    }
+  }
+
   // Get card price from Scryfall
   static async getCardPrice(cardName: string, setName?: string, isFoil: boolean = false): Promise<number> {
     try {
+      // Card names with apostrophes (like "Teferi's Protection") are handled correctly
+      // encodeURIComponent properly encodes apostrophes and other special characters
       const searchQuery = setName 
         ? `name:"${cardName}" set:"${setName}"`
         : `name:"${cardName}"`;
@@ -159,8 +426,60 @@ export class CardImageService {
     }
   }
 
+  // Batch fetch prices for multiple cards with rate limiting
+  static async getMultipleCardPrices(
+    cards: Array<{name: string, set?: string, isFoil?: boolean}>,
+    onProgress?: (current: number, total: number) => void
+  ): Promise<Map<string, number>> {
+    const results = new Map<string, number>();
+    const BATCH_SIZE = 5; // Process 5 cards at a time
+    const DELAY_BETWEEN_BATCHES = 200; // 200ms delay between batches
+    const DELAY_BETWEEN_CARDS = 100; // 100ms delay between cards in a batch
+    
+    for (let i = 0; i < cards.length; i += BATCH_SIZE) {
+      const batch = cards.slice(i, i + BATCH_SIZE);
+      
+      // Process batch in parallel (but limited to BATCH_SIZE)
+      const batchPromises = batch.map(async (card, batchIndex) => {
+        // Add small delay even within batch to be respectful
+        if (batchIndex > 0) {
+          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_CARDS));
+        }
+        
+        try {
+          const price = await this.getCardPrice(card.name, card.set, card.isFoil || false);
+          return { name: card.name, price };
+        } catch (error) {
+          console.error(`Error fetching price for ${card.name}:`, error);
+          return { name: card.name, price: 0 };
+        }
+      });
+      
+      const batchResults = await Promise.all(batchPromises);
+      batchResults.forEach(({ name, price }) => {
+        results.set(name, price);
+      });
+      
+      // Report progress
+      if (onProgress) {
+        onProgress(Math.min(i + BATCH_SIZE, cards.length), cards.length);
+      }
+      
+      // Delay between batches (except for the last batch)
+      if (i + BATCH_SIZE < cards.length) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+      }
+    }
+    
+    console.log(`Successfully fetched ${results.size} out of ${cards.length} card prices`);
+    return results;
+  }
+
   // Batch fetch multiple cards
-  static async getMultipleCardImages(cards: Array<{name: string, set?: string}>): Promise<Map<string, string>> {
+  static async getMultipleCardImages(
+    cards: Array<{name: string, set?: string}>,
+    onProgress?: (current: number, total: number) => void
+  ): Promise<Map<string, string>> {
     const results = new Map<string, string>();
     
     // Process cards one at a time to be very respectful to the API
@@ -174,6 +493,11 @@ export class CardImageService {
         }
       } catch (error) {
         console.error(`Error fetching image for ${card.name}:`, error);
+      }
+
+      // Report progress
+      if (onProgress) {
+        onProgress(i + 1, cards.length);
       }
 
       // Delay between each card to be respectful to the API

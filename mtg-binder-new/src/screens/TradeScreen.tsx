@@ -13,26 +13,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Trade'>;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
-// Helper function to format Firebase timestamps
-const formatFirebaseTimestamp = (timestamp: any): string => {
-  if (!timestamp) return 'Recently';
-  
-  try {
-    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
-      return timestamp.toDate().toLocaleDateString();
-    }
-    if (timestamp instanceof Date) {
-      return timestamp.toLocaleDateString();
-    }
-    if (typeof timestamp === 'number') {
-      return new Date(timestamp).toLocaleDateString();
-    }
-    return 'Recently';
-  } catch (error) {
-    console.error('Error formatting timestamp:', error);
-    return 'Recently';
-  }
-};
+import { formatDate } from '../lib/dateUtils';
 
 // Swipeable Trade Card Component
 interface SwipeableTradeCardProps {
@@ -306,7 +287,7 @@ const SwipeableTradeCard: React.FC<SwipeableTradeCardProps> = ({
               )}
             </Text>
             <Text category="c1" appearance="hint" style={styles.tradeDate}>
-              {formatFirebaseTimestamp(trade.createdAt)}
+              {formatDate(trade.createdAt)}
             </Text>
           </Layout>
 

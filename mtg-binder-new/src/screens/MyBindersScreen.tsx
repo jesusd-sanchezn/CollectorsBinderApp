@@ -17,32 +17,11 @@ import { RootStackParamList, Binder } from '../types';
 import { BinderService } from '../lib/binderService';
 import { updateAllBindersToPublic } from '../lib/updateBindersToPublic';
 import AlertModal from '../components/AlertModal';
+import ConfirmModal from '../components/ConfirmModal';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Helper function to format Firebase timestamps
-const formatFirebaseTimestamp = (timestamp: any): string => {
-  if (!timestamp) return 'Recently';
-  
-  try {
-    // If it's a Firebase timestamp, convert it to Date
-    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
-      return timestamp.toDate().toLocaleDateString();
-    }
-    // If it's already a Date object
-    if (timestamp instanceof Date) {
-      return timestamp.toLocaleDateString();
-    }
-    // If it's a number (milliseconds)
-    if (typeof timestamp === 'number') {
-      return new Date(timestamp).toLocaleDateString();
-    }
-    return 'Recently';
-  } catch (error) {
-    console.error('Error formatting timestamp:', error);
-    return 'Recently';
-  }
-};
+import { formatDate } from '../lib/dateUtils';
 
 // Helper function to calculate binder statistics
 const calculateBinderStats = (binder: Binder): { cardCount: number; totalValue: number } => {
@@ -76,6 +55,9 @@ export default function MyBindersScreen({ navigation }: Props) {
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'danger'>('danger');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [binderToDelete, setBinderToDelete] = useState<Binder | null>(null);
+  const [deleting, setDeleting] = useState(false);
   
   // Image editor modal state
   const [showImageModal, setShowImageModal] = useState(false);
@@ -106,6 +88,32 @@ export default function MyBindersScreen({ navigation }: Props) {
     setAlertMessage(message);
     setAlertType(type);
     setShowAlert(true);
+  };
+
+  const handleDeleteBinder = (binder: Binder) => {
+    setBinderToDelete(binder);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteBinder = async () => {
+    if (!binderToDelete) {
+      setShowDeleteConfirm(false);
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await BinderService.deleteBinder(binderToDelete.id);
+      showAlertModal('Success', 'Binder deleted successfully', 'success');
+      await loadBinders();
+    } catch (error) {
+      console.error('Error deleting binder:', error);
+      showAlertModal('Error', 'Failed to delete binder');
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+      setBinderToDelete(null);
+    }
   };
   
   const handleEditBackground = (binder: Binder) => {
@@ -335,18 +343,27 @@ export default function MyBindersScreen({ navigation }: Props) {
                             ${totalValue.toFixed(2)}
                           </Text>
                           <Text category="c1" appearance="hint" style={styles.statText}>
-                            Updated {formatFirebaseTimestamp(binder.updatedAt)}
+                            Updated {formatDate(binder.updatedAt)}
                           </Text>
                         </Layout>
                       </Layout>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.editIcon}
-                      onPress={() => handleEditBackground(binder)}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="edit-2" size={18} color="#FF8610" />
-                    </TouchableOpacity>
+                    <View style={styles.binderActions}>
+                      <TouchableOpacity
+                        style={styles.actionIcon}
+                        onPress={() => handleEditBackground(binder)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="edit-2" size={18} color="#FF8610" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.actionIcon}
+                        onPress={() => handleDeleteBinder(binder)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="trash-2" size={18} color="#FF3D71" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </ImageBackground>
               </View>
@@ -374,18 +391,27 @@ export default function MyBindersScreen({ navigation }: Props) {
                           ${totalValue.toFixed(2)}
                         </Text>
                         <Text category="c1" appearance="hint" style={styles.statText}>
-                          Updated {formatFirebaseTimestamp(binder.updatedAt)}
+                          Updated {formatDate(binder.updatedAt)}
                         </Text>
                       </Layout>
                     </Layout>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.editIcon}
-                    onPress={() => handleEditBackground(binder)}
-                    activeOpacity={0.7}
-                  >
-                    <Feather name="edit-2" size={18} color="#FF8610" />
-                  </TouchableOpacity>
+                  <View style={styles.binderActions}>
+                    <TouchableOpacity
+                      style={styles.actionIcon}
+                      onPress={() => handleEditBackground(binder)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="edit-2" size={18} color="#FF8610" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionIcon}
+                      onPress={() => handleDeleteBinder(binder)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="trash-2" size={18} color="#FF3D71" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </Card>
             );
@@ -557,6 +583,21 @@ export default function MyBindersScreen({ navigation }: Props) {
         type={alertType}
         onClose={() => setShowAlert(false)}
       />
+
+      <ConfirmModal
+        visible={showDeleteConfirm}
+        title="Delete Binder"
+        message={binderToDelete ? `Are you sure you want to delete "${binderToDelete.name}"? This action cannot be undone.` : ''}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDeleteBinder}
+        onCancel={() => {
+          setShowDeleteConfirm(false);
+          setBinderToDelete(null);
+        }}
+        confirmStatus="danger"
+        loading={deleting}
+      />
     </ScreenContainer>
   );
 }
@@ -671,11 +712,15 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 10,
   },
-  editIcon: {
+  binderActions: {
     position: 'absolute',
     top: 10,
     right: 10,
     zIndex: 2,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionIcon: {
     padding: 8,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.6)',

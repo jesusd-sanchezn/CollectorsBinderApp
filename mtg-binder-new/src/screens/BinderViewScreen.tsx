@@ -5,7 +5,9 @@ import {
   TouchableOpacity, 
   Modal,
   Image,
-  View
+  View,
+  Platform,
+  Linking
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Input, Spinner } from '@ui-kitten/components';
@@ -22,6 +24,7 @@ import { CardImageService } from '../lib/cardImageService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BinderView'>;
@@ -35,6 +38,7 @@ export default function BinderViewScreen({ route }: Props) {
   const [showImportModal, setShowImportModal] = useState(false);
   const [csvData, setCsvData] = useState('');
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ stage: '', current: 0, total: 0 });
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [selectedCardSlot, setSelectedCardSlot] = useState<{pageNumber: number, slotPosition: number} | null>(null);
@@ -101,9 +105,40 @@ export default function BinderViewScreen({ route }: Props) {
     }
   };
 
+  const pickCSVFile = async () => {
+    try {
+      // Allow all file types and validate by extension
+      // This ensures CSV files are visible in the file picker on all platforms
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*', // Accept all files
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const fileName = asset.name?.toLowerCase() || '';
+        
+        // Check if it's a CSV file by extension
+        if (!fileName.endsWith('.csv') && !fileName.endsWith('.txt')) {
+          showAlertModal('Warning', 'Please select a CSV file (.csv extension)', 'warning');
+          return;
+        }
+        
+        const fileUri = asset.uri;
+        const fileContent = await FileSystem.readAsStringAsync(fileUri);
+        setCsvData(fileContent);
+        showAlertModal('File Loaded', `Loaded ${asset.name}`, 'success');
+      }
+    } catch (error) {
+      console.error('Error picking CSV file:', error);
+      showAlertModal('Error', 'Failed to pick CSV file. Please try again.');
+    }
+  };
+
   const importCSV = async () => {
     if (!csvData.trim()) {
-      showAlertModal('Error', 'Please paste your CSV data');
+      showAlertModal('Error', 'Please upload or paste your CSV data');
       return;
     }
 
@@ -119,8 +154,25 @@ export default function BinderViewScreen({ route }: Props) {
       }
 
       // Convert to app format with real card images
-      showAlertModal('Loading Images', `Fetching card images from Scryfall for ${parseResult.cards.length} cards... This may take a few minutes.`, 'warning');
-      const appCards = await CSVParser.convertToAppCards(parseResult.cards);
+      const cardCount = parseResult.cards.length;
+      if (cardCount > 50) {
+        showAlertModal(
+          'Large Import Detected', 
+          `Importing ${cardCount} cards. This will take several minutes. Please keep the app open.`, 
+          'warning'
+        );
+      }
+      
+      const appCards = await CSVParser.convertToAppCards(
+        parseResult.cards,
+        (stage, current, total) => {
+          setImportProgress({ stage, current, total });
+          console.log(`Import progress: ${stage} - ${current}/${total}`);
+        }
+      );
+      
+      // Reset progress after completion
+      setImportProgress({ stage: '', current: 0, total: 0 });
       
               // Add cards to the binder using BinderService
               if (binder) {
@@ -201,32 +253,53 @@ export default function BinderViewScreen({ route }: Props) {
     } catch (error) {
       console.error('Error importing CSV:', error);
       showAlertModal('Error', 'Failed to import CSV. Please check the format.');
+      setImportProgress({ stage: '', current: 0, total: 0 });
     } finally {
       setImporting(false);
+      setImportProgress({ stage: '', current: 0, total: 0 });
     }
   };
 
   const handleDownloadTemplate = async () => {
     try {
-      const templateContent = 'QuantityX,Name,Foil,Edition (name),Condition\n';
-      const fileUri = `${FileSystem.cacheDirectory}mtg-binder-import-template.csv`;
+      const templateContent = 'Quantity,Name\n4,Lightning Bolt\n2,Counterspell\n1,Teferi\'s Protection\n';
+      const fileName = 'mtg-binder-import-template.csv';
+      
+      // Save to document directory (user-accessible location)
+      const documentDir = FileSystem.documentDirectory;
+      if (!documentDir) {
+        showAlertModal('Error', 'Unable to access document directory');
+        return;
+      }
+      
+      const fileUri = `${documentDir}${fileName}`;
       await FileSystem.writeAsStringAsync(fileUri, templateContent);
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Share CSV Template',
-        });
-      } else {
-        showAlertModal(
-          'Template Ready',
-          'CSV template saved to your device cache directory. Share or copy it manually.',
-          'success'
-        );
+      
+      // Open the file - on mobile, we use sharing which allows user to choose app to open with
+      // This is the standard way to "open" files on mobile platforms
+      try {
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          // This will show a dialog to open the file in an app (Excel, Sheets, etc.)
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/csv',
+            dialogTitle: 'Open CSV Template',
+            UTI: 'public.comma-separated-values-text' // iOS UTI for CSV
+          });
+        } else {
+          showAlertModal(
+            'Template Downloaded',
+            'CSV template has been saved. You can find it in your file manager.',
+            'success'
+          );
+        }
+      } catch (error) {
+        // User may have cancelled the dialog, which is fine
+        console.log('File open dialog cancelled or error:', error);
       }
     } catch (error) {
-      console.error('Error exporting CSV template:', error);
-      showAlertModal('Error', 'Failed to create CSV template. Please try again.');
+      console.error('Error downloading CSV template:', error);
+      showAlertModal('Error', 'Failed to download CSV template. Please try again.');
     }
   };
 
@@ -801,8 +874,9 @@ export default function BinderViewScreen({ route }: Props) {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <Layout style={styles.modalContainer}>
-          <Layout style={styles.modalHeader} level="2">
+        <SafeAreaView style={styles.modalSafeArea} edges={['top']}>
+          <Layout style={styles.modalContainer}>
+            <Layout style={styles.modalHeader} level="2">
             <Button
               appearance="ghost"
               status="basic"
@@ -827,24 +901,58 @@ export default function BinderViewScreen({ route }: Props) {
             <Layout style={styles.loadingOverlay}>
               <Layout style={styles.loadingContent}>
                 <Spinner size="large" status="primary" />
-                <Text category="s1" appearance="hint" style={styles.loadingText}>Fetching card images from Scryfall...</Text>
-                <Text category="s1" appearance="hint" style={styles.loadingSubtext}>This may take a few minutes</Text>
+                <Text category="s1" appearance="hint" style={styles.loadingText}>
+                  {importProgress.stage === 'fetching' 
+                    ? `Fetching latest printings from Scryfall... (${importProgress.current}/${importProgress.total})`
+                    : 'Processing cards...'}
+                </Text>
+                <Text category="s1" appearance="hint" style={styles.loadingSubtext}>
+                  {importProgress.total > 50 
+                    ? `Large import in progress. Please keep the app open. Estimated time: ${Math.ceil((importProgress.total - importProgress.current) * 0.3)} seconds remaining`
+                    : 'This may take a few minutes'}
+                </Text>
+                {importProgress.total > 0 && (
+                  <View style={styles.progressBarContainer}>
+                    <View 
+                      style={[
+                        styles.progressBar, 
+                        { width: `${(importProgress.current / importProgress.total) * 100}%` }
+                      ]} 
+                    />
+                  </View>
+                )}
               </Layout>
             </Layout>
           )}
 
-          <Layout style={styles.modalContent}>
+          <ScrollView 
+            style={styles.modalScrollView}
+            contentContainerStyle={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+          >
             <Text category="h6" style={styles.instructionsTitle}>CSV Import Instructions</Text>
             <Text category="s1" appearance="hint" style={styles.instructionsText}>
-              Paste your DelverLens CSV export here. The format should include:
+              Upload a CSV file or paste your card list here. Only quantity and card name are required. The app will automatically fetch the latest non-foil printing of each card.
             </Text>
             <Text category="s1" appearance="hint" style={styles.instructionsList}>
-              • Card Name (required){'\n'}
-              • Set Name (required){'\n'}
-              • Quantity (required){'\n'}
-              • Condition (optional, defaults to NM){'\n'}
-              • Finish (optional, defaults to nonfoil)
+              <Text style={{ fontWeight: 'bold' }}>Column Order (if no header):</Text>{'\n'}
+              1. Quantity (required){'\n'}
+              2. Card Name (required){'\n\n'}
+              <Text style={{ fontWeight: 'bold' }}>Or include a header row with "Quantity" and "Name" columns.</Text>{'\n\n'}
+              <Text style={{ fontStyle: 'italic' }}>Note: The app will automatically select the latest non-foil printing (preferring special printings like showcase or borderless).</Text>
             </Text>
+
+            <Button
+              appearance="filled"
+              status="primary"
+              onPress={pickCSVFile}
+              style={styles.uploadButton}
+              disabled={importing}
+              accessoryLeft={() => <Feather name="upload" size={16} color="#FFFFFF" />}
+            >
+              Upload CSV File
+            </Button>
 
             <Button
               appearance="outline"
@@ -856,14 +964,9 @@ export default function BinderViewScreen({ route }: Props) {
               Download CSV Template
             </Button>
 
-            <Layout style={styles.sampleBox} level="3">
-              <Text category="s1" style={styles.sampleTitle}>📝 Sample CSV Format:</Text>
-              <Text category="s1" appearance="hint" style={styles.sampleText}>
-                Card Name,Set Name,Quantity,Condition,Finish{'\n'}
-                Lightning Bolt,Magic 2010,4,NM,nonfoil{'\n'}
-                Counterspell,Magic 2010,2,LP,foil
-              </Text>
-            </Layout>
+            <Text category="s1" appearance="hint" style={styles.orText}>
+              Or paste CSV data here:
+            </Text>
 
             <Input
               style={styles.csvInput}
@@ -875,6 +978,21 @@ export default function BinderViewScreen({ route }: Props) {
               textStyle={styles.csvInputText}
             />
 
+            <Layout style={styles.sampleBox} level="3">
+              <Text category="s1" style={styles.sampleTitle}>📝 Sample CSV Format:</Text>
+              <Text category="s1" appearance="hint" style={styles.sampleText}>
+                <Text style={{ fontWeight: 'bold' }}>With Header:</Text>{'\n'}
+                Quantity,Name{'\n'}
+                4,Lightning Bolt{'\n'}
+                2,Counterspell{'\n'}
+                1,Teferi's Protection{'\n\n'}
+                <Text style={{ fontWeight: 'bold' }}>Without Header (default order):</Text>{'\n'}
+                4,Lightning Bolt{'\n'}
+                2,Counterspell{'\n'}
+                1,Teferi's Protection
+              </Text>
+            </Layout>
+
             <Layout style={styles.infoBox} level="3">
               <Text category="h6" style={styles.infoTitle}>💡 Tips</Text>
               <Text category="s1" appearance="hint" style={styles.infoText}>
@@ -884,8 +1002,9 @@ export default function BinderViewScreen({ route }: Props) {
                 • Empty slots will be filled automatically
               </Text>
             </Layout>
-          </Layout>
+          </ScrollView>
         </Layout>
+        </SafeAreaView>
       </Modal>
 
       {/* Manual Add Card Modal */}
@@ -1091,6 +1210,85 @@ export default function BinderViewScreen({ route }: Props) {
         onConfirm={confirmRearrangeCards}
         onCancel={() => setShowRearrangeConfirm(false)}
       />
+
+      {/* Trade Review Modal */}
+      <Modal
+        visible={showConfirmModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+          <Layout style={styles.tradeReviewModalContainer}>
+            <Layout style={styles.tradeReviewHeader} level="2">
+              <Text category="h5" style={styles.tradeReviewTitle}>Review Trade Request</Text>
+              <Button
+                appearance="ghost"
+                status="basic"
+                size="small"
+                onPress={() => setShowConfirmModal(false)}
+                style={{ width: 40 }}
+                accessoryLeft={() => <Feather name="x" size={20} color="#FFFFFF" />}
+              />
+            </Layout>
+
+            <ScrollView style={styles.tradeReviewContent}>
+              <Text category="s1" appearance="hint" style={styles.tradeReviewInstructions}>
+                You are requesting {selectedCardsForTrade.size} card{selectedCardsForTrade.size === 1 ? '' : 's'} from {ownerName}. Review your selection below and confirm to send the trade request.
+              </Text>
+
+              <Layout style={styles.selectedCardsList}>
+                {Array.from(selectedCardsForTrade.values()).map((item, index) => (
+                  <Layout key={`${item.pageNumber}-${item.slotPosition}`} style={styles.selectedCardItem} level="3">
+                    {item.card.imageUrl ? (
+                      <Image 
+                        source={{ uri: item.card.imageUrl }} 
+                        style={styles.selectedCardImage}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <Layout style={styles.selectedCardPlaceholder}>
+                        <Text category="c1" appearance="hint">?</Text>
+                      </Layout>
+                    )}
+                    <Layout style={styles.selectedCardInfo}>
+                      <Text category="s1" style={styles.selectedCardName}>{item.card.name}</Text>
+                      <Text category="c1" appearance="hint" style={styles.selectedCardDetails}>
+                        {item.card.set} • {item.card.condition} • {item.card.finish}
+                      </Text>
+                      {item.card.price && (
+                        <Text category="s1" status="success" style={styles.selectedCardPrice}>
+                          ${(item.card.price * (item.card.quantity || 1)).toFixed(2)}
+                        </Text>
+                      )}
+                    </Layout>
+                  </Layout>
+                ))}
+              </Layout>
+            </ScrollView>
+
+            <Layout style={styles.tradeReviewFooter} level="2">
+              <Button
+                appearance="ghost"
+                status="basic"
+                onPress={() => setShowConfirmModal(false)}
+                style={styles.tradeReviewCancelButton}
+              >
+                Cancel
+              </Button>
+              <Button
+                status="primary"
+                onPress={handleConfirmTrade}
+                disabled={creatingTrade}
+                style={styles.tradeReviewConfirmButton}
+                accessoryLeft={creatingTrade ? () => <Spinner size="small" status="control" /> : undefined}
+              >
+                {creatingTrade ? 'Sending...' : 'Confirm Trade Request'}
+              </Button>
+            </Layout>
+          </Layout>
+        </SafeAreaView>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -1272,9 +1470,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  modalContent: {
+  modalScrollView: {
     flex: 1,
+  },
+  modalContent: {
     padding: 20,
+    paddingBottom: 40,
   },
   instructionsTitle: {
     fontSize: 18,
@@ -1293,10 +1494,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     lineHeight: 20,
   },
+  uploadButton: {
+    marginTop: 12,
+    marginBottom: 12,
+  },
   templateButton: {
     marginTop: 12,
     marginBottom: 16,
     borderColor: '#FF8610',
+  },
+  orText: {
+    textAlign: 'center',
+    marginBottom: 12,
+    fontSize: 14,
+    color: '#999',
   },
   csvInput: {
     backgroundColor: '#2a2a2a',
@@ -1500,6 +1711,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  progressBarContainer: {
+    width: '80%',
+    height: 8,
+    backgroundColor: '#333',
+    borderRadius: 4,
+    marginTop: 16,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#FF8610',
+    borderRadius: 4,
+  },
   // Selection Mode Styles
   cardSlotSelectionMode: {
     borderWidth: 2,
@@ -1610,6 +1834,89 @@ const styles = StyleSheet.create({
   },
   screenContent: {
     paddingBottom: 32,
+  },
+  // Trade Review Modal Styles
+  tradeReviewModalContainer: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
+  },
+  tradeReviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  tradeReviewTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  tradeReviewContent: {
+    flex: 1,
+    padding: 20,
+  },
+  tradeReviewInstructions: {
+    fontSize: 14,
+    color: '#ccc',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  selectedCardsList: {
+    gap: 12,
+  },
+  selectedCardItem: {
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  selectedCardImage: {
+    width: 60,
+    height: 84,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  selectedCardPlaceholder: {
+    width: 60,
+    height: 84,
+    borderRadius: 4,
+    marginRight: 12,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedCardInfo: {
+    flex: 1,
+  },
+  selectedCardName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  selectedCardDetails: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+  },
+  selectedCardPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tradeReviewFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+    gap: 12,
+  },
+  tradeReviewCancelButton: {
+    flex: 1,
+  },
+  tradeReviewConfirmButton: {
+    flex: 1,
   },
 });
 
