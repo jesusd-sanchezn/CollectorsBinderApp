@@ -238,9 +238,11 @@ export class CSVParser {
     onProgress?: (stage: string, current: number, total: number) => void
   ): Promise<any[]> {
     const appCards: any[] = [];
-    const BATCH_SIZE = 5; // Process 5 cards at a time
-    const DELAY_BETWEEN_BATCHES = 200; // 200ms delay between batches
-    const DELAY_BETWEEN_CARDS = 100; // 100ms delay between cards in a batch
+    // Scryfall allows 10 requests per second, so we can safely process 10 cards at a time
+    // Each card makes ~2-3 API calls, but they're sequential within each card
+    const BATCH_SIZE = 10; // Process 10 cards at a time (increased from 5)
+    const DELAY_BETWEEN_BATCHES = 100; // 100ms delay between batches (reduced from 200ms)
+    const DELAY_BETWEEN_CARDS = 50; // 50ms delay between cards in a batch (reduced from 100ms)
     
     // Process cards in batches to fetch latest non-foil printings
     for (let i = 0; i < parsedCards.length; i += BATCH_SIZE) {
@@ -258,8 +260,9 @@ export class CSVParser {
             onProgress('fetching', i + batchIndex + 1, parsedCards.length);
           }
           
-          // Fetch latest non-foil printing
-          const printing = await CardImageService.getLatestNonFoilPrinting(card.name);
+          // Fetch latest non-foil printing using EXACT matching (no fuzzy search)
+          // This ensures "Badgermole" matches "Badgermole" and not "Badgermole Cub"
+          const printing = await CardImageService.getLatestNonFoilPrintingExact(card.name);
           
           if (printing) {
             return {

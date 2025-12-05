@@ -5,6 +5,7 @@ import {
   Modal,
   TouchableOpacity
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Layout, Text, Button, Input, Card, Spinner } from '@ui-kitten/components';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -288,52 +289,58 @@ export default function FriendsScreen({ navigation }: Props) {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <Layout style={styles.modalContainer}>
-          <Layout style={styles.modalHeader} level="2">
-            <Button
-              appearance="ghost"
-              status="basic"
-              size="small"
-              onPress={() => setShowAddFriendModal(false)}
-            >
-              Cancel
-            </Button>
-            <Text category="h6" style={styles.modalTitle}>Add Friend</Text>
-            <Button
-              status="primary"
-              size="small"
-              onPress={handleAddFriend}
-              disabled={addingFriend}
-              accessoryLeft={addingFriend ? () => <Spinner size="small" status="control" /> : undefined}
-            >
-              {addingFriend ? 'Sending...' : 'Send'}
-            </Button>
-          </Layout>
+        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+          <Layout style={styles.modalContainer}>
+            <Layout style={styles.modalHeader} level="2">
+              <Button
+                appearance="ghost"
+                status="basic"
+                size="small"
+                onPress={() => setShowAddFriendModal(false)}
+              >
+                Cancel
+              </Button>
+              <Text category="h6" style={styles.modalTitle}>Add Friend</Text>
+              <Button
+                status="primary"
+                size="small"
+                onPress={handleAddFriend}
+                disabled={addingFriend}
+                accessoryLeft={addingFriend ? () => <Spinner size="small" status="control" /> : undefined}
+              >
+                {addingFriend ? 'Sending...' : 'Send'}
+              </Button>
+            </Layout>
 
-          <Layout style={styles.modalContent}>
-            <Text category="s1" style={styles.inputLabel}>Friend's Email Address</Text>
-            <Input
-              style={styles.textInput}
-              value={friendEmail}
-              onChangeText={setFriendEmail}
-              placeholder="friend@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              disabled={addingFriend}
-            />
+            <ScrollView 
+              style={styles.modalContent}
+              contentContainerStyle={styles.modalContentContainer}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text category="s1" style={styles.inputLabel}>Friend's Email Address</Text>
+              <Input
+                style={styles.textInput}
+                value={friendEmail}
+                onChangeText={setFriendEmail}
+                placeholder="friend@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                disabled={addingFriend}
+              />
 
-            <Card style={styles.infoBox}>
-              <Text category="h6" style={styles.infoTitle}>📧 How to Add Friends</Text>
-              <Text category="s1" appearance="hint" style={styles.infoText}>
-                • Enter your friend's email address{'\n'}
-                • They must have an account on this app{'\n'}
-                • They'll receive a friend request{'\n'}
-                • Once accepted, you can view each other's public binders
-              </Text>
-            </Card>
+              <Card style={styles.infoBox}>
+                <Text category="h6" style={styles.infoTitle}>📧 How to Add Friends</Text>
+                <Text category="s1" appearance="hint" style={styles.infoText}>
+                  • Enter your friend's email address{'\n'}
+                  • They must have an account on this app{'\n'}
+                  • They'll receive a friend request{'\n'}
+                  • Once accepted, you can view each other's public binders
+                </Text>
+              </Card>
+            </ScrollView>
           </Layout>
-        </Layout>
+        </SafeAreaView>
       </Modal>
 
       <AlertModal
@@ -478,6 +485,10 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 4,
   },
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: '#222B45',
+  },
   modalContainer: {
     flex: 1,
   },
@@ -486,6 +497,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
+    paddingTop: 12,
     borderBottomWidth: 1,
     borderRadius: 0,
   },
@@ -494,7 +506,10 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flex: 1,
+  },
+  modalContentContainer: {
     padding: 20,
+    paddingBottom: 40,
   },
   inputLabel: {
     marginBottom: 8,

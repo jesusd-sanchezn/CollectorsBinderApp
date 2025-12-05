@@ -13,7 +13,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { Trade, TradeItem } from '../types';
-import { NotificationService } from './notificationService';
 
 export class TradeService {
   // Helper method to get current user ID
@@ -223,20 +222,7 @@ export class TradeService {
 
       await updateDoc(doc(db, 'trades', tradeId), updateData);
 
-      // Send notification to initiator
-      // Note: This sends a local notification to the current user's device
-      // For proper push notifications to the initiator, you'd need to implement
-      // a server-side notification system (e.g., Cloud Functions)
-      try {
-        const currentUser = auth.currentUser;
-        const acceptorName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
-        // The notification will appear on the recipient's device (current user)
-        // In a production app, you'd send a push notification to the initiator's device
-        await NotificationService.notifyTradeAccepted(acceptorName, tradeId);
-      } catch (notificationError) {
-        console.error('Error sending notification:', notificationError);
-        // Don't fail the entire operation if notification fails
-      }
+      // Notification will be sent automatically via useTradeNotifications hook
     } catch (error) {
       console.error('Error accepting trade:', error);
       throw error;
@@ -269,20 +255,7 @@ export class TradeService {
 
       await updateDoc(doc(db, 'trades', tradeId), updateData);
 
-      // Send notification to initiator
-      // Note: This sends a local notification to the current user's device
-      // For proper push notifications to the initiator, you'd need to implement
-      // a server-side notification system (e.g., Cloud Functions)
-      try {
-        const currentUser = auth.currentUser;
-        const declinerName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Someone';
-        // The notification will appear on the recipient's device (current user)
-        // In a production app, you'd send a push notification to the initiator's device
-        await NotificationService.notifyTradeDeclined(declinerName, tradeId);
-      } catch (notificationError) {
-        console.error('Error sending notification:', notificationError);
-        // Don't fail the entire operation if notification fails
-      }
+      // Notification will be sent automatically via useTradeNotifications hook
     } catch (error) {
       console.error('Error declining trade:', error);
       throw error;

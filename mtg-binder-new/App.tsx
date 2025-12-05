@@ -57,6 +57,7 @@ import { NotificationService } from './src/lib/notificationService';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { useFriendNotifications } from './src/hooks/useFriendNotifications';
+import { useTradeNotifications } from './src/hooks/useTradeNotifications';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -77,6 +78,7 @@ export default function App() {
   const responseListener = useRef<Notifications.Subscription>();
 
   useFriendNotifications(user?.uid);
+  useTradeNotifications(user?.uid);
 
   useEffect(() => {
     const unsubscribe = initializeAuth();

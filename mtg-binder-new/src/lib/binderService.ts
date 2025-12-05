@@ -279,6 +279,109 @@ export class BinderService {
     }
   }
 
+  // Batch add multiple cards to a binder (more efficient for large imports)
+  // This method builds up all changes locally and writes them in batches to avoid Firestore write exhaustion
+  static async batchAddCards(
+    binderId: string,
+    cards: Card[],
+    onProgress?: (current: number, total: number) => void
+  ): Promise<{ imported: number; failed: number }> {
+    try {
+      // Get the current binder state
+      const binder = await this.getBinder(binderId);
+      if (!binder) throw new Error('Binder not found');
+
+      let importedCount = 0;
+      let failedCount = 0;
+      const BATCH_WRITE_SIZE = 50; // Write to Firestore every 50 cards to avoid exhaustion
+      
+      // Build up all changes locally first
+      let updatedPages = [...binder.pages];
+      let cardIndex = 0;
+      let lastWriteIndex = 0;
+
+      for (const card of cards) {
+        try {
+          let slotFound = false;
+          
+          // Try to find an empty slot in existing pages
+          for (let pageIndex = 0; pageIndex < updatedPages.length && !slotFound; pageIndex++) {
+            const page = updatedPages[pageIndex];
+            for (let slotIndex = 0; slotIndex < page.slots.length && !slotFound; slotIndex++) {
+              if (page.slots[slotIndex].isEmpty) {
+                // Add card to this slot (locally)
+                updatedPages[pageIndex].slots[slotIndex] = {
+                  id: `${binderId}-${pageIndex + 1}-${slotIndex}`,
+                  position: slotIndex,
+                  card: this.sanitizeCard(card),
+                  isEmpty: false
+                } as BinderSlot;
+                slotFound = true;
+                importedCount++;
+              }
+            }
+          }
+
+          // If no empty slots found, add a new page
+          if (!slotFound) {
+            const newPageNumber = updatedPages.length + 1;
+            const newPage = this.createEmptyPage(newPageNumber);
+            // Add card to first slot of the new page
+            newPage.slots[0] = {
+              id: `${binderId}-${newPageNumber}-0`,
+              position: 0,
+              card: this.sanitizeCard(card),
+              isEmpty: false
+            } as BinderSlot;
+            updatedPages.push(newPage);
+            importedCount++;
+          }
+
+          cardIndex++;
+
+          // Write to Firestore in batches to avoid write stream exhaustion
+          if (cardIndex - lastWriteIndex >= BATCH_WRITE_SIZE || cardIndex === cards.length) {
+            const sanitizedPages = this.sanitizePages(updatedPages);
+            await updateDoc(doc(db, 'binders', binderId), {
+              pages: sanitizedPages,
+              updatedAt: serverTimestamp()
+            });
+            
+            lastWriteIndex = cardIndex;
+            
+            // Small delay between batch writes to prevent overwhelming Firestore
+            if (cardIndex < cards.length) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+            }
+          }
+
+          // Report progress
+          if (onProgress) {
+            onProgress(cardIndex, cards.length);
+          }
+        } catch (cardError) {
+          console.error(`Error processing card ${card.name}:`, cardError);
+          failedCount++;
+          // Continue with next card
+        }
+      }
+
+      // Final write if there are remaining changes that haven't been written
+      if (lastWriteIndex < cardIndex) {
+        const sanitizedPages = this.sanitizePages(updatedPages);
+        await updateDoc(doc(db, 'binders', binderId), {
+          pages: sanitizedPages,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      return { imported: importedCount, failed: failedCount };
+    } catch (error) {
+      console.error('Error in batch add cards:', error);
+      throw error;
+    }
+  }
+
   // Remove a card from a specific slot
   static async removeCardFromSlot(
     binderId: string, 

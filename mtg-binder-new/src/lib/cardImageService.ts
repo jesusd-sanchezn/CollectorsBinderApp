@@ -154,7 +154,170 @@ export class CardImageService {
     return !card.finishes || !card.finishes.includes('foil');
   }
 
+  // Get latest non-foil printing of a card with EXACT name matching (for imports)
+  // This ensures "Badgermole" matches "Badgermole" and not "Badgermole Cub"
+  static async getLatestNonFoilPrintingExact(cardName: string): Promise<{
+    imageUrl: string;
+    setName: string;
+    setCode: string;
+    collectorNumber: string;
+    price: number;
+  } | null> {
+    try {
+      try {
+        // Try non-foil first with exact name match using quoted search
+        // The quotes ensure exact phrase matching in Scryfall
+        const exactQuery = encodeURIComponent(`name:"${cardName}" -is:foil`);
+        const response = await fetch(`https://api.scryfall.com/cards/search?q=${exactQuery}&order=released&dir=desc&format=json`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.data && data.data.length > 0) {
+            // CRITICAL: Filter to ensure EXACT name match (case-insensitive)
+            // This prevents "Badgermole" from matching "Badgermole Cub"
+            const exactMatches = data.data.filter((c: ScryfallCard) => 
+              c.name.toLowerCase().trim() === cardName.toLowerCase().trim()
+            );
+            
+            if (exactMatches.length > 0) {
+              const specialPrintings = exactMatches.filter((c: ScryfallCard) => 
+                c.frame_effects && c.frame_effects.length > 0 && this.isNonFoil(c)
+              );
+              const selectedCard = specialPrintings.length > 0 ? specialPrintings[0] : exactMatches.find((c: ScryfallCard) => this.isNonFoil(c)) || exactMatches[0];
+              
+              const imageUrl = this.extractImageUrl(selectedCard);
+              if (imageUrl) {
+                return {
+                  imageUrl,
+                  setName: selectedCard.set_name || '',
+                  setCode: selectedCard.set || '',
+                  collectorNumber: selectedCard.collector_number || '',
+                  price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+                };
+              }
+            }
+          }
+        }
+        
+        // If no non-foil found, try all printings with exact match
+        const allExactQuery = encodeURIComponent(`name:"${cardName}"`);
+        const allResponse = await fetch(`https://api.scryfall.com/cards/search?q=${allExactQuery}&order=released&dir=desc&format=json`);
+        
+        if (allResponse.ok) {
+          const allData = await allResponse.json();
+          if (allData.data && allData.data.length > 0) {
+            // CRITICAL: Filter to ensure EXACT name match (case-insensitive)
+            const exactMatches = allData.data.filter((c: ScryfallCard) => 
+              c.name.toLowerCase().trim() === cardName.toLowerCase().trim()
+            );
+            
+            if (exactMatches.length > 0) {
+              const specialPrintings = exactMatches.filter((c: ScryfallCard) => 
+                c.frame_effects && c.frame_effects.length > 0
+              );
+              const nonFoilCards = exactMatches.filter((c: ScryfallCard) => this.isNonFoil(c));
+              const selectedCard = specialPrintings.length > 0 ? specialPrintings[0] : 
+                                 (nonFoilCards.length > 0 ? nonFoilCards[0] : exactMatches[0]);
+              
+              const imageUrl = this.extractImageUrl(selectedCard);
+              if (imageUrl) {
+                return {
+                  imageUrl,
+                  setName: selectedCard.set_name || '',
+                  setCode: selectedCard.set || '',
+                  collectorNumber: selectedCard.collector_number || '',
+                  price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+                };
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error in exact search for ${cardName}:`, error);
+        // Continue to next strategy
+      }
+
+      // Strategy 2: Try Scryfall's exact named endpoint (but verify the name matches)
+      // Only use this if the search API didn't find an exact match
+      try {
+        const exactName = encodeURIComponent(cardName);
+        const exactResponse = await fetch(`https://api.scryfall.com/cards/named?exact=${exactName}`);
+        
+        if (exactResponse.ok) {
+          const card = await exactResponse.json() as ScryfallCard;
+          // CRITICAL: Verify the returned card name matches exactly what we searched for
+          if (card.name && card.name.toLowerCase().trim() === cardName.toLowerCase().trim()) {
+            // Only proceed if the name matches exactly
+            const imageUrl = this.extractImageUrl(card);
+            if (imageUrl && this.isNonFoil(card)) {
+              return {
+                imageUrl,
+                setName: card.set_name || '',
+                setCode: card.set || '',
+                collectorNumber: card.collector_number || '',
+                price: card.prices?.usd ? parseFloat(card.prices.usd) : 0
+              };
+            }
+          }
+        }
+      } catch (error) {
+        // Continue
+      }
+
+      // Strategy 3: Handle double-faced cards with exact matching
+      if (cardName.includes(' // ')) {
+        const faces = cardName.split(' // ');
+        const firstFace = faces[0].trim();
+        const secondFace = faces[1]?.trim();
+        
+        try {
+          // Search for double-faced cards with exact match on first face
+          const query = encodeURIComponent(`name:"${firstFace}" -is:foil`);
+          const response = await fetch(`https://api.scryfall.com/cards/search?q=${query}&order=released&dir=desc&format=json`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.data && data.data.length > 0) {
+              // Filter for cards that match the full double-faced name exactly
+              const exactMatches = data.data.filter((c: ScryfallCard) => {
+                const cardNameLower = c.name.toLowerCase().trim();
+                const searchNameLower = cardName.toLowerCase().trim();
+                return cardNameLower === searchNameLower;
+              });
+              
+              if (exactMatches.length > 0) {
+                const specialPrintings = exactMatches.filter((c: ScryfallCard) => 
+                  c.frame_effects && c.frame_effects.length > 0 && this.isNonFoil(c)
+                );
+                const selectedCard = specialPrintings.length > 0 ? specialPrintings[0] : exactMatches.find((c: ScryfallCard) => this.isNonFoil(c)) || exactMatches[0];
+                
+                const imageUrl = this.extractImageUrl(selectedCard);
+                if (imageUrl) {
+                  return {
+                    imageUrl,
+                    setName: selectedCard.set_name || '',
+                    setCode: selectedCard.set || '',
+                    collectorNumber: selectedCard.collector_number || '',
+                    price: selectedCard.prices?.usd ? parseFloat(selectedCard.prices.usd) : 0
+                  };
+                }
+              }
+            }
+          }
+        } catch (error) {
+          // Continue
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Error fetching exact card printing for ${cardName}:`, error);
+      return null;
+    }
+  }
+
   // Get latest non-foil printing of a card (prefers special printings)
+  // Uses fuzzy matching - good for user searches but NOT for imports
   static async getLatestNonFoilPrinting(cardName: string): Promise<{
     imageUrl: string;
     setName: string;
@@ -432,9 +595,10 @@ export class CardImageService {
     onProgress?: (current: number, total: number) => void
   ): Promise<Map<string, number>> {
     const results = new Map<string, number>();
-    const BATCH_SIZE = 5; // Process 5 cards at a time
-    const DELAY_BETWEEN_BATCHES = 200; // 200ms delay between batches
-    const DELAY_BETWEEN_CARDS = 100; // 100ms delay between cards in a batch
+    // Scryfall allows 10 requests per second, so we can safely process 10 cards at a time
+    const BATCH_SIZE = 10; // Process 10 cards at a time (increased from 5)
+    const DELAY_BETWEEN_BATCHES = 100; // 100ms delay between batches (reduced from 200ms)
+    const DELAY_BETWEEN_CARDS = 50; // 50ms delay between cards in a batch (reduced from 100ms)
     
     for (let i = 0; i < cards.length; i += BATCH_SIZE) {
       const batch = cards.slice(i, i + BATCH_SIZE);

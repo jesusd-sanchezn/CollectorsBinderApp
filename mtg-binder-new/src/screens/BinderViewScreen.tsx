@@ -17,7 +17,6 @@ import { BinderService } from '../lib/binderService';
 import { CSVParser } from '../lib/csvParser';
 import { useAuthStore } from '../state/useAuthStore';
 import { TradeService } from '../lib/tradeService';
-import { NotificationService } from '../lib/notificationService';
 import AlertModal from '../components/AlertModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { CardImageService } from '../lib/cardImageService';
@@ -54,7 +53,8 @@ export default function BinderViewScreen({ route }: Props) {
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [cardSearchTerm, setCardSearchTerm] = useState('');
   const [cardSearchLoading, setCardSearchLoading] = useState(false);
-  const [cardSearchResult, setCardSearchResult] = useState<Card | null>(null);
+  const [cardSearchResults, setCardSearchResults] = useState<Card[]>([]);
+  const [selectedCardFromSearch, setSelectedCardFromSearch] = useState<Card | null>(null);
   const [cardSearchMessage, setCardSearchMessage] = useState<string | null>(null);
   const [cardSearchMessageType, setCardSearchMessageType] = useState<'info' | 'danger'>('info');
   const [addingCard, setAddingCard] = useState(false);
@@ -142,6 +142,11 @@ export default function BinderViewScreen({ route }: Props) {
       return;
     }
 
+    if (!binder) {
+      showAlertModal('Error', 'Binder not loaded. Please try again.');
+      return;
+    }
+
     try {
       setImporting(true);
       
@@ -150,6 +155,7 @@ export default function BinderViewScreen({ route }: Props) {
       
       if (!parseResult.success) {
         showAlertModal('CSV Parse Error', parseResult.errors.join('\n'), 'warning');
+        setImporting(false);
         return;
       }
 
@@ -171,90 +177,34 @@ export default function BinderViewScreen({ route }: Props) {
         }
       );
       
-      // Reset progress after completion
-      setImportProgress({ stage: '', current: 0, total: 0 });
+      // Add cards to the binder using BinderService batch method
+      // This is much more efficient for large imports as it batches Firestore writes
+      setImportProgress({ stage: 'adding', current: 0, total: appCards.length });
+
+      const result = await BinderService.batchAddCards(
+        binderId,
+        appCards,
+        (current, total) => {
+          setImportProgress({ stage: 'adding', current, total });
+        }
+      );
+
+      // Reload from Firebase to ensure consistency
+      await loadBinder();
       
-              // Add cards to the binder using BinderService
-              if (binder) {
-                let importedCount = 0;
-                let currentBinder = { ...binder }; // Work with a local copy
-
-                for (const card of appCards) {
-                  let slotFound = false;
-                  
-                  // Try to find an empty slot in existing pages
-                  for (let pageIndex = 0; pageIndex < currentBinder.pages.length && !slotFound; pageIndex++) {
-                    const page = currentBinder.pages[pageIndex];
-                    for (let slotIndex = 0; slotIndex < page.slots.length && !slotFound; slotIndex++) {
-                      if (page.slots[slotIndex].isEmpty) {
-                        // Add card to this slot
-                        await BinderService.addCardToSlot(
-                          binderId,
-                          pageIndex + 1,
-                          slotIndex,
-                          card
-                        );
-                        slotFound = true;
-                        importedCount++;
-                        
-                        // Update local binder state
-                        currentBinder.pages[pageIndex].slots[slotIndex] = {
-                          id: `${binderId}-${pageIndex + 1}-${slotIndex}`,
-                          position: slotIndex,
-                          card,
-                          isEmpty: false
-                        };
-                      }
-                    }
-                  }
-
-                  // If no empty slots found, add a new page
-                  if (!slotFound) {
-                    await BinderService.addPageToBinder(binderId);
-                    // Add card to first slot of the new page
-                    await BinderService.addCardToSlot(
-                      binderId,
-                      currentBinder.pages.length + 1,
-                      0,
-                      card
-                    );
-                    importedCount++;
-                    
-                    // Update local binder state
-                    const newPageNumber = currentBinder.pages.length + 1;
-                    const newPage: BinderPage = {
-                      id: `page-${newPageNumber}`,
-                      pageNumber: newPageNumber,
-                      slots: Array.from({ length: 9 }, (_, i): BinderSlot => ({
-                        id: `slot-${newPageNumber}-${i}`,
-                        position: i,
-                        isEmpty: i !== 0
-                      }))
-                    };
-                    newPage.slots[0] = {
-                      id: `${binderId}-${newPageNumber}-0`,
-                      position: 0,
-                      card: card as Card,
-                      isEmpty: false
-                    };
-                    currentBinder.pages.push(newPage);
-                  }
-                }
-
-                // Update the local binder state immediately
-                setBinder(currentBinder);
-                
-                // Also reload from Firebase to ensure consistency
-                await loadBinder();
-                showAlertModal('Success', `Imported ${importedCount} cards successfully!`, 'success');
-                setCsvData('');
-                setShowImportModal(false);
-              }
+      // Show success message with details
+      const message = result.failed > 0 
+        ? `Imported ${result.imported} cards successfully. ${result.failed} cards failed to import.`
+        : `Imported ${result.imported} cards successfully!`;
+      showAlertModal('Success', message, 'success');
+      setCsvData('');
+      setShowImportModal(false);
     } catch (error) {
       console.error('Error importing CSV:', error);
-      showAlertModal('Error', 'Failed to import CSV. Please check the format.');
-      setImportProgress({ stage: '', current: 0, total: 0 });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to import CSV. Please check the format.';
+      showAlertModal('Error', errorMessage);
     } finally {
+      // Always reset importing state and progress
       setImporting(false);
       setImportProgress({ stage: '', current: 0, total: 0 });
     }
@@ -315,7 +265,8 @@ export default function BinderViewScreen({ route }: Props) {
 
   const resetAddCardForm = () => {
     setCardSearchTerm('');
-    setCardSearchResult(null);
+    setCardSearchResults([]);
+    setSelectedCardFromSearch(null);
     setCardSearchMessage(null);
     setCardSearchMessageType('info');
     setCardSearchLoading(false);
@@ -382,13 +333,43 @@ export default function BinderViewScreen({ route }: Props) {
     }
   };
 
-  const searchCardOnScryfall = async (term: string): Promise<Card | null> => {
-    const encoded = encodeURIComponent(term);
-    const exact = await fetchCardFromScryfall(`exact=${encoded}`);
-    if (exact) {
-      return exact;
+  const searchCardsOnScryfall = async (term: string): Promise<Card[]> => {
+    try {
+      // Use Scryfall search API with prefix matching
+      // The query "name:Vraska" will find cards that start with "Vraska"
+      // Escape special characters in the search term
+      const escapedTerm = term.replace(/[\\"']/g, '\\$&');
+      const query = `name:${escapedTerm}`;
+      const encoded = encodeURIComponent(query);
+      const url = `https://api.scryfall.com/cards/search?q=${encoded}&order=name&dir=asc&unique=cards&format=json`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        // If search fails, return empty array
+        return [];
+      }
+      
+      const data = await response.json();
+      if (!data.data || data.data.length === 0) {
+        return [];
+      }
+      
+      // Map Scryfall cards to app cards and filter to only cards that start with the search term
+      const lowerTerm = term.toLowerCase();
+      const cards: Card[] = data.data
+        .map((scryfallCard: any) => mapScryfallCardToAppCard(scryfallCard))
+        .filter((card: Card) => card.name.toLowerCase().startsWith(lowerTerm))
+        // Remove duplicates by card name (keep first occurrence)
+        .filter((card: Card, index: number, self: Card[]) => 
+          index === self.findIndex((c: Card) => c.name === card.name)
+        );
+      
+      // Limit to first 20 results for performance
+      return cards.slice(0, 20);
+    } catch (error) {
+      console.error('Error searching cards on Scryfall:', error);
+      return [];
     }
-    return fetchCardFromScryfall(`fuzzy=${encoded}`);
   };
 
   const handleStartAddCard = (pageNumber: number, slotPosition: number) => {
@@ -411,23 +392,25 @@ export default function BinderViewScreen({ route }: Props) {
     if (!term) {
       setCardSearchMessageType('danger');
       setCardSearchMessage('Enter a card name to search.');
-      setCardSearchResult(null);
+      setCardSearchResults([]);
+      setSelectedCardFromSearch(null);
       return;
     }
 
     setCardSearchLoading(true);
     setCardSearchMessage(null);
-    setCardSearchResult(null);
+    setCardSearchResults([]);
+    setSelectedCardFromSearch(null);
 
     try {
-      const result = await searchCardOnScryfall(term);
-      if (result) {
-        setCardSearchResult(result);
+      const results = await searchCardsOnScryfall(term);
+      if (results.length > 0) {
+        setCardSearchResults(results);
         setCardSearchMessageType('info');
-        setCardSearchMessage(`${result.name} (${result.set})`);
+        setCardSearchMessage(`Found ${results.length} card${results.length === 1 ? '' : 's'}. Select one to add.`);
       } else {
         setCardSearchMessageType('danger');
-        setCardSearchMessage('No card found. Try a different name or spelling.');
+        setCardSearchMessage('No cards found. Try a different name or spelling.');
       }
     } catch (error) {
       console.error('Error searching for card:', error);
@@ -438,10 +421,14 @@ export default function BinderViewScreen({ route }: Props) {
     }
   };
 
+  const handleSelectCardFromSearch = (card: Card) => {
+    setSelectedCardFromSearch(card);
+  };
+
   const handleAddCardToSlot = async () => {
-    if (!slotToFill || !cardSearchResult) {
+    if (!slotToFill || !selectedCardFromSearch) {
       setCardSearchMessageType('danger');
-      setCardSearchMessage('Search for a card before adding it to the binder.');
+      setCardSearchMessage('Please select a card from the list.');
       return;
     }
 
@@ -449,8 +436,8 @@ export default function BinderViewScreen({ route }: Props) {
 
     try {
       const rawCard: Card = {
-        ...cardSearchResult,
-        id: `${cardSearchResult.id}-${Date.now()}`,
+        ...selectedCardFromSearch,
+        id: `${selectedCardFromSearch.id}-${Date.now()}`,
         quantity: 1,
       };
 
@@ -549,19 +536,13 @@ export default function BinderViewScreen({ route }: Props) {
       }));
 
       // Create trade in Firebase
+      // The notification will be sent automatically via useTradeNotifications hook
       const tradeId = await TradeService.createTrade(
         ownerId,
         ownerName,
         user.displayName || user.email?.split('@')[0] || 'Someone',
         wants,
         [] // No offers for now
-      );
-
-      // Send notification to binder owner
-      await NotificationService.notifyTradeRequest(
-        user.displayName || user.email?.split('@')[0] || 'Someone',
-        tradeId,
-        wants.length
       );
 
       // Success!
@@ -1062,35 +1043,66 @@ export default function BinderViewScreen({ route }: Props) {
             {cardSearchMessage}
           </Text>
         ) : null}
-        {cardSearchResult && (
-          <Layout style={styles.searchResultCard} level="2">
-            <Image
-              source={{ uri: cardSearchResult.imageUrl }}
-              style={styles.searchResultImage}
-              resizeMode="contain"
-            />
-            <Layout style={styles.searchResultInfo}>
-              <Text category="h6" style={styles.searchResultTitle}>{cardSearchResult.name}</Text>
-              <Text category="s1" appearance="hint" style={styles.searchResultSubtitle}>
-                {cardSearchResult.set} ({cardSearchResult.setCode})
-              </Text>
-              {cardSearchResult.price ? (
-                <Text category="s1" style={styles.searchResultPrice}>
-                  ${cardSearchResult.price.toFixed(2)}
-                </Text>
-              ) : null}
-            </Layout>
-            <Button
-              status="success"
-              size="small"
-              style={styles.searchResultButton}
-              onPress={handleAddCardToSlot}
-              disabled={addingCard}
-              accessoryLeft={addingCard ? () => <Spinner size="small" status="control" /> : undefined}
+        {cardSearchResults.length > 0 && (
+          <Layout style={styles.searchResultsContainer} level="1">
+            <Text category="s1" style={styles.searchResultsTitle}>
+              Select a card:
+            </Text>
+            <ScrollView 
+              style={styles.searchResultsList}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={true}
             >
-              {addingCard ? 'Adding...' : 'Add Card'}
-            </Button>
+              {cardSearchResults.map((card, index) => (
+                <TouchableOpacity
+                  key={`${card.id}-${index}`}
+                  style={[
+                    styles.searchResultCard,
+                    selectedCardFromSearch?.id === card.id && styles.searchResultCardSelected
+                  ]}
+                  onPress={() => handleSelectCardFromSearch(card)}
+                  activeOpacity={0.7}
+                >
+                  {card.imageUrl ? (
+                    <Image
+                      source={{ uri: card.imageUrl }}
+                      style={styles.searchResultImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <Layout style={styles.searchResultImagePlaceholder} level="2">
+                      <Text category="c1" appearance="hint">No Image</Text>
+                    </Layout>
+                  )}
+                  <Layout style={styles.searchResultInfo}>
+                    <Text category="s1" style={styles.searchResultTitle}>{card.name}</Text>
+                    <Text category="c1" appearance="hint" style={styles.searchResultSubtitle}>
+                      {card.set} ({card.setCode})
+                    </Text>
+                    {card.price ? (
+                      <Text category="c1" style={styles.searchResultPrice}>
+                        ${card.price.toFixed(2)}
+                      </Text>
+                    ) : null}
+                  </Layout>
+                  {selectedCardFromSearch?.id === card.id && (
+                    <Feather name="check-circle" size={24} color="#FF8610" style={styles.selectedIcon} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </Layout>
+        )}
+        {selectedCardFromSearch && (
+          <Button
+            status="success"
+            style={styles.addSelectedCardButton}
+            onPress={handleAddCardToSlot}
+            disabled={addingCard}
+            accessoryLeft={addingCard ? () => <Spinner size="small" status="control" /> : undefined}
+          >
+            {addingCard ? 'Adding...' : `Add "${selectedCardFromSearch.name}" to Binder`}
+          </Button>
         )}
       </ScrollView>
           </Layout>
@@ -1556,41 +1568,75 @@ const styles = StyleSheet.create({
   searchStatusText: {
     marginTop: 12,
   },
-  searchResultCard: {
+  searchResultsContainer: {
     marginTop: 16,
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     backgroundColor: '#2a2a2a',
-    gap: 12,
+    maxHeight: 400,
+  },
+  searchResultsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  searchResultsList: {
+    maxHeight: 350,
+  },
+  searchResultCard: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#1a1a1a',
+    marginBottom: 8,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  searchResultCardSelected: {
+    borderColor: '#FF8610',
+    backgroundColor: '#2a1a0a',
   },
   searchResultImage: {
-    width: 120,
-    height: 170,
-    borderRadius: 8,
+    width: 60,
+    height: 84,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  searchResultImagePlaceholder: {
+    width: 60,
+    height: 84,
+    borderRadius: 6,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#333',
   },
   searchResultInfo: {
-    width: '100%',
-    alignItems: 'center',
+    flex: 1,
     gap: 4,
   },
   searchResultTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
-  },
-  searchResultSubtitle: {
-    fontSize: 14,
-    color: '#ccc',
-    textAlign: 'center',
-  },
-  searchResultPrice: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#FF8610',
+    color: '#fff',
   },
-  searchResultButton: {
+  searchResultSubtitle: {
+    fontSize: 12,
+    color: '#ccc',
+  },
+  searchResultPrice: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FF8610',
+    marginTop: 4,
+  },
+  selectedIcon: {
+    marginLeft: 8,
+  },
+  addSelectedCardButton: {
+    marginTop: 16,
     alignSelf: 'stretch',
   },
   sampleBox: {
